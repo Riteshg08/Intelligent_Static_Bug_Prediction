@@ -4,7 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://sbp_user:sbp_password@localhost/sbp_db"
+    "DATABASE_URL", "postgresql+psycopg2://sbp_user:sbp_password@localhost/sbp_db"
 )
 
 # For tests we might want sqlite

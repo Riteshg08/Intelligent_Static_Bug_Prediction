@@ -12,7 +12,7 @@ import os
 
 config = context.config
 # Overwrite DB URL from env
-config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL", "postgresql://sbp_user:sbp_password@localhost/sbp_db"))
+config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL", "postgresql+psycopg2://sbp_user:sbp_password@localhost/sbp_db"))
 
 target_metadata = Base.metadata
 if config.config_file_name is not None:
