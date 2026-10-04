@@ -6,6 +6,12 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  React.useEffect(() => {
+    if (!localStorage.getItem('token')) {
+      navigate('/login');
+    }
+  }, [navigate, location.pathname]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.location.href = '/login';
