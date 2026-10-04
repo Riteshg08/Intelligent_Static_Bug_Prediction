@@ -1,17 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../lib/api';
 import { AlertTriangle, AlertCircle, Info, ChevronRight, ChevronLeft, FileCode, CheckCircle2, FileWarning, Search, Folder, ChevronUp, ChevronDown, AlignLeft } from 'lucide-react';
-
-const api = axios.create({
-  baseURL: '/api/v1'
-});
-
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
 
 const ITEM_HEIGHT = 22; // px per line
 const BUFFER = 20;
@@ -52,7 +42,7 @@ export default function ProjectViewer() {
 
   useEffect(() => {
     // Also fetch project name for the explorer
-    api.get('/api/v1/projects').then(res => {
+    api.get('/projects').then(res => {
       const p = res.data.find(x => x.id.toString() === projectId);
       if (p) setProjectName(p.name);
     }).catch(() => {});

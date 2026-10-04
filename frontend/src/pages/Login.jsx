@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../lib/api';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -13,7 +13,7 @@ export default function Login() {
       const formData = new FormData();
       formData.append('username', username);
       formData.append('password', password);
-      const res = await axios.post('/api/v1/auth/login', formData);
+      const res = await api.post('/auth/login', formData);
       localStorage.setItem('token', res.data.access_token);
       navigate('/');
     } catch {
@@ -24,7 +24,7 @@ export default function Login() {
   const handleRegister = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('/api/v1/auth/register', { username, password });
+      const res = await api.post('/auth/register', { username, password });
       localStorage.setItem('token', res.data.access_token);
       navigate('/');
     } catch {

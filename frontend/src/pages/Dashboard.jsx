@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { useNavigate } from 'react-router-dom';
 import { Info, Folder, AlertCircle, AlertTriangle, CheckCircle2, MoreHorizontal, Clock, Plus } from 'lucide-react';
 
@@ -14,22 +14,16 @@ export default function Dashboard() {
 
   const fetchProjects = useCallback(async () => {
     try {
-      const res = await axios.get('/api/v1/projects', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get('/projects');
       setProjects(res.data);
     } catch (err) {
       console.error(err);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
-    if (!token) {
-      navigate('/login');
-      return;
-    }
     fetchProjects();
-  }, [token, navigate, fetchProjects]);
+  }, [fetchProjects]);
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -38,9 +32,8 @@ export default function Dashboard() {
     formData.append('file', file);
     
     try {
-      const res = await axios.post('/api/v1/projects', formData, {
+      const res = await api.post('/projects', formData, {
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
@@ -48,9 +41,7 @@ export default function Dashboard() {
       const projectId = res.data.id;
       
       // Start analysis right away
-      await axios.post(`/api/v1/projects/${projectId}/analyze`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/projects/${projectId}/analyze`);
       
       setName('');
       setFile(null);
@@ -195,7 +186,6 @@ export default function Dashboard() {
             
             <div className="flex items-center mb-2">
               <h3 className="text-base font-bold text-gray-900 mr-2 truncate">{project.name}</h3>
-              {project.name.toLowerCase().includes('test') && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium border border-gray-200 uppercase tracking-wider">Demo</span>}
             </div>
             
             <div className="flex flex-wrap gap-1 mb-4">

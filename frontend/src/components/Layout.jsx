@@ -37,22 +37,13 @@ export default function Layout() {
               <Code2 className="w-4 h-4 inline mr-2 mb-0.5" />
               Code review
             </button>
-            <button className={`px-3 py-1.5 rounded-md ${currentSection === 'Results' ? 'text-gray-900 bg-gray-100' : 'text-gray-600 hover:bg-gray-50'}`}>
               <Table2 className="w-4 h-4 inline mr-2 mb-0.5" />
               Results
-            </button>
-            <button className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-50">
-              <Gauge className="w-4 h-4 inline mr-2 mb-0.5" />
-              Models
             </button>
           </div>
         </div>
         
         <div className="flex items-center space-x-3 text-sm">
-          <div className="hidden sm:flex items-center space-x-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-full border border-green-200 font-medium">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Demo workspace</span>
-          </div>
           <button className="text-gray-500 hover:text-gray-700 p-1.5">
             <Bell className="w-5 h-5" />
           </button>
@@ -102,21 +93,7 @@ export default function Layout() {
             </div>
           </div>
 
-          <div className="px-4 mb-2">
-            <h3 className="text-xs font-bold text-gray-400 tracking-wider mb-3 uppercase">Insights</h3>
-          </div>
           <div className="px-3 space-y-0.5 text-sm font-medium">
-            <button className="w-full flex items-center px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100">
-              <Gauge className="w-5 h-5 mr-3" />
-              Model quality
-            </button>
-            <button className="w-full flex items-center justify-between px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100">
-              <div className="flex items-center">
-                <TrendingUp className="w-5 h-5 mr-3" />
-                Trends
-              </div>
-              <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">Soon</span>
-            </button>
           </div>
         </aside>
 

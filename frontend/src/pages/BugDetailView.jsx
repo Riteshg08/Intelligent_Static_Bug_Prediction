@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { useParams } from 'react-router-dom';
 import { Check, X } from 'lucide-react';
 
@@ -10,20 +10,16 @@ export default function BugDetailView() {
   const token = localStorage.getItem('token');
 
   const fetchReport = useCallback(async () => {
-    const res = await axios.get(`/api/v1/predictions/${id}/report`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await api.get(`/predictions/${id}/report`);
     setReport(res.data);
-  }, [id, token]);
+  }, [id]);
 
   useEffect(() => {
     fetchReport();
   }, [fetchReport]);
 
   const submitFeedback = async (isBug) => {
-    await axios.post(`/api/v1/predictions/${id}/feedback?is_real_bug=${isBug}`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    await api.post(`/predictions/${id}/feedback?is_real_bug=${isBug}`);
     setFeedbackSaved(true);
   };
 

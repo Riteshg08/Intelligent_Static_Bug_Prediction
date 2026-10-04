@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertCircle, AlertTriangle, CheckCircle2, Download, Search, Info, Activity } from 'lucide-react';
 
@@ -14,25 +14,21 @@ export default function AnalysisView() {
 
   const checkStatus = useCallback(async () => {
     try {
-      const res = await axios.get(`/api/v1/analysis/${runId}/status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(`/analysis/${runId}/status`);
       setStatus(res.data.status);
     } catch (e) {
       console.error(e);
     }
-  }, [runId, token]);
+  }, [runId]);
 
   const fetchPredictions = useCallback(async () => {
     try {
-      const res = await axios.get(`/api/v1/analysis/${runId}/predictions`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(`/analysis/${runId}/predictions`);
       setPredictions(res.data.sort((a, b) => b.risk_score - a.risk_score));
     } catch (e) {
       console.error(e);
     }
-  }, [runId, token]);
+  }, [runId]);
 
   useEffect(() => {
     let interval;
