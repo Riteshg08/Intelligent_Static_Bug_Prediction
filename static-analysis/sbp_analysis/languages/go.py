@@ -36,7 +36,7 @@ class GoPlugin(LanguagePlugin):
 
     @property
     def nesting_nodes(self) -> Set[str]:
-        return {"block", "if_statement", "for_statement", "expression_case", "type_case", "communication_case"}
+        return {"if_statement", "for_statement", "expression_case", "type_case", "communication_case"}
 
     @property
     def parameter_nodes(self) -> Set[str]:

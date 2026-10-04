@@ -7,8 +7,11 @@ from .features import extract_features
 from .registry import registry
 from tree_sitter import Parser, Query, QueryCursor
 
-def analyze_directory(directory: str) -> pd.DataFrame:
+from typing import Tuple
+def analyze_directory(directory: str) -> Tuple[pd.DataFrame, list]:
     results = []
+    all_hotspots = []
+    skipped_files_list = []
     
     skipped = 0
     parsed = 0
@@ -40,6 +43,13 @@ def analyze_directory(directory: str) -> pd.DataFrame:
                         count_imports(child)
                 count_imports(tree.root_node)
                 
+                # Hotspots
+                if hasattr(plugin, 'analyze_hotspots'):
+                    file_hotspots = plugin.analyze_hotspots(tree.root_node, content_bytes)
+                    for h in file_hotspots:
+                        h['file_path'] = file_path
+                    all_hotspots.extend(file_hotspots)
+                
                 funcs = parse_file(file_path)
                 parsed += 1
                 for func in funcs:
@@ -49,10 +59,12 @@ def analyze_directory(directory: str) -> pd.DataFrame:
                     feats['function_name'] = func.function_name
                     results.append(feats)
             except Exception as e:
+                print(f"Skipped {file_path}: {e}")
+                skipped_files_list.append((file_path, str(e)))
                 skipped += 1
                 
     print(f"Parsed {parsed} files. Skipped {skipped} files.")
-    return pd.DataFrame(results)
+    return pd.DataFrame(results), all_hotspots, skipped_files_list
 
 def main():
     parser = argparse.ArgumentParser(description="Extract features from a directory.")
@@ -62,7 +74,7 @@ def main():
     args = parser.parse_args()
     
     if os.path.isdir(args.path):
-        df = analyze_directory(args.path)
+        df, _, _ = analyze_directory(args.path)
     else:
         # Single file
         funcs = parse_file(args.path)

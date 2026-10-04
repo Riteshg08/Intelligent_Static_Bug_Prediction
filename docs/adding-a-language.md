@@ -66,6 +66,15 @@ class RustPlugin(LanguagePlugin):
     @property
     def comment_nodes(self) -> Set[str]:
         return {"line_comment", "block_comment"}
+
+    def analyze_hotspots(self, root_node, source_code: bytes) -> list:
+        # Implement tree-sitter traversal to find hotspots like:
+        # - deep nesting
+        # - long parameter lists
+        # - loose equality / wrong equality
+        # - empty error handlers
+        # Return a list of dicts: {"start_line": int, "end_line": int, "severity": str, "rule_id": str, "message": str}
+        return []
 ```
 
 ### 3. Register the Plugin

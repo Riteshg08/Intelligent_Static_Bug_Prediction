@@ -16,7 +16,7 @@ export default function Login() {
       const res = await axios.post('/api/v1/auth/login', formData);
       localStorage.setItem('token', res.data.access_token);
       navigate('/');
-    } catch (err) {
+    } catch {
       alert('Login failed');
     }
   };
@@ -27,7 +27,7 @@ export default function Login() {
       const res = await axios.post('/api/v1/auth/register', { username, password });
       localStorage.setItem('token', res.data.access_token);
       navigate('/');
-    } catch (err) {
+    } catch {
       alert('Registration failed');
     }
   };

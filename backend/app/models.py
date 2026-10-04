@@ -32,6 +32,9 @@ class File(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), index=True)
     path = Column(String)
     language = Column(String, index=True)
+    source_code = Column(String)
+    line_count = Column(Integer)
+    status = Column(String, default="pending")
     
     project = relationship("Project", back_populates="files")
     features = relationship("ExtractedFeature", back_populates="file")
@@ -108,3 +111,19 @@ class BugReport(Base):
     report_text = Column(String)
     
     project = relationship("Project", back_populates="bug_reports")
+
+class Hotspot(Base):
+    __tablename__ = "hotspots"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("analysis_runs.id"), index=True)
+    file_id = Column(Integer, ForeignKey("files.id"), index=True)
+    
+    start_line = Column(Integer)
+    end_line = Column(Integer)
+    severity = Column(String)  # info | warning | high
+    rule_id = Column(String)
+    message = Column(String)
+    
+    run = relationship("AnalysisRun")
+    file = relationship("File")

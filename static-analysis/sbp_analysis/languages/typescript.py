@@ -31,6 +31,12 @@ class TypeScriptPlugin(LanguagePlugin):
         (variable_declarator
           name: (identifier) @name
           value: (function_expression)) @function
+        (assignment_expression
+          left: (_) @name
+          right: (function_expression)) @function
+        (assignment_expression
+          left: (_) @name
+          right: (arrow_function)) @function
         """
 
     @property
@@ -43,7 +49,7 @@ class TypeScriptPlugin(LanguagePlugin):
 
     @property
     def nesting_nodes(self) -> Set[str]:
-        return {"statement_block", "if_statement", "for_statement", "while_statement", "try_statement", "catch_clause"}
+        return {"if_statement", "for_statement", "while_statement", "try_statement", "catch_clause", "switch_statement", "do_statement"}
 
     @property
     def parameter_nodes(self) -> Set[str]:

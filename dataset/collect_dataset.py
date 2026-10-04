@@ -4,6 +4,8 @@ import re
 import pandas as pd
 from datetime import datetime
 from pydriller import Repository, Git
+import sys
+sys.path.insert(0, os.path.abspath('static-analysis'))
 from sbp_analysis.parser import parse_file
 from sbp_analysis.features import extract_features
 import tempfile
@@ -70,7 +72,7 @@ def collect_from_repo(repo_path: str, lang: str, repo_name: str, max_commits=20)
     commits.reverse()
     
     for commit in commits:
-        if commits_analyzed >= 200 or bug_commits >= max_commits:
+        if commits_analyzed >= 2000 or bug_commits >= max_commits:
             break
         commits_analyzed += 1
         
@@ -92,51 +94,44 @@ def collect_from_repo(repo_path: str, lang: str, repo_name: str, max_commits=20)
                     continue
                 parent_commit = commit.parents[0]
                 
-                # We need to blame the deleted lines on the parent commit
+                # We don't even need to run SZZ blame just to extract the buggy function.
+                # The function in the parent_commit contains the bug!
                 try:
-                    blame = git.get_commits_last_modified_lines(parent_commit, modified_file.old_path, deleted_lines)
-                except Exception as e:
-                    logger.debug(f"Blame failed: {e}")
+                    source_code = git.repo.git.show(f"{parent_commit.hash}:{modified_file.old_path}")
+                except Exception:
                     continue
                     
-                buggy_commits = set(blame.values())
-                
-                # For each buggy commit, checkout and parse the function
-                for bc_hash in buggy_commits:
-                    try:
-                        bc = git.get_commit(bc_hash)
-                        # We don't checkout physically to avoid messing up the working tree
-                        # Instead we just get the file content at that commit
-                        source_code = bc.repo.git.show(f"{bc_hash}:{modified_file.old_path}")
-                    except Exception:
+                fd, tmp_path = tempfile.mkstemp(suffix="."+modified_file.filename.split('.')[-1])
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    f.write(source_code)
+                    
+                funcs = parse_file(tmp_path)
+                with open(tmp_path, 'rb') as f:
+                    content_bytes = f.read()
+                    
+                for func in funcs:
+                    if func.language != lang: continue
+                    
+                    func_is_buggy = False
+                    for line in deleted_lines:
+                        if func.start_line <= line <= func.end_line:
+                            func_is_buggy = True
+                            break
+                            
+                    if not func_is_buggy:
                         continue
                         
-                    # Write to temp file to parse
-                    fd, tmp_path = tempfile.mkstemp(suffix="."+modified_file.filename.split('.')[-1])
-                    with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                        f.write(source_code)
-                        
-                    funcs = parse_file(tmp_path)
+                    feat = extract_features(func, content_bytes, 0)
+                    feat['repo'] = repo_name
+                    feat['language'] = func.language
+                    feat['file'] = modified_file.old_path
+                    feat['function'] = func.function_name
+                    feat['commit'] = parent_commit.hash
+                    feat['timestamp'] = parent_commit.committer_date.timestamp()
+                    feat['label'] = 1
+                    buggy_functions.append(feat)
                     
-                    with open(tmp_path, 'rb') as f:
-                        content_bytes = f.read()
-                        
-                    for func in funcs:
-                        if func.language != lang: continue
-                        # To be precise we should check if the deleted line falls in func bounds.
-                        # For MVP, we'll assume the functions in this buggy file were bug-prone.
-                        # We'll just take the first one or all
-                        feat = extract_features(func, content_bytes, 0)
-                        feat['repo'] = repo_name
-                        feat['language'] = func.language
-                        feat['file'] = modified_file.old_path
-                        feat['function'] = func.function_name
-                        feat['commit'] = bc_hash
-                        feat['timestamp'] = bc.committer_date.timestamp()
-                        feat['label'] = 1
-                        buggy_functions.append(feat)
-                        
-                    os.remove(tmp_path)
+                os.remove(tmp_path)
                     
     logger.info(f"Collected {len(buggy_functions)} buggy functions and {len(clean_functions)} clean functions from {repo_name}")
     return buggy_functions + clean_functions
@@ -153,7 +148,7 @@ def main():
             repo_path = os.path.join('dataset/clones', lang, repo_name)
             
             if os.path.exists(repo_path):
-                data = collect_from_repo(repo_path, lang, repo_name)
+                data = collect_from_repo(repo_path, lang, repo_name, max_commits=500)
                 all_data.extend(data)
                 
     df = pd.DataFrame(all_data)

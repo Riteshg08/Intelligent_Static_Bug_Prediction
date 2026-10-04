@@ -6,6 +6,9 @@ from rq import Worker, Queue
 from sqlalchemy.orm import Session
 from .database import SessionLocal
 from . import models
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../static-analysis')))
+
 from sbp_analysis.cli import analyze_directory
 from sbp_predict.engine import PredictionEngine
 import re
@@ -39,24 +42,36 @@ def run_analysis(run_id: int):
         storage_path = f"../storage/projects/{project.id}"
         
         # We can extract features
-        df = analyze_directory(storage_path)
+        # We can extract features
+        df, all_hotspots, skipped_files_list = analyze_directory(storage_path)
         features = df.to_dict('records')
         
-        # Save files to db if not exists
+        file_path_to_id = {}
+        
+        # All pending files in db
+        pending_files = db.query(models.File).filter(models.File.project_id == project.id, models.File.status == "pending").all()
+        pending_files_by_path = {os.path.abspath(os.path.join(storage_path, f.path)): f for f in pending_files}
+
+        # Mark skipped files
+        skipped_paths = set(os.path.abspath(p[0]) for p in skipped_files_list)
+        
+        for f_path, db_f in pending_files_by_path.items():
+            if f_path in skipped_paths:
+                db_f.status = "skipped"
+            else:
+                db_f.status = "analyzed"
+            db.add(db_f)
+            file_path_to_id[f_path] = db_f.id
+        db.commit()
+
+        # predict
         for feat in features:
-            file_path = feat['file_path']
+            file_path = os.path.abspath(feat['file_path'])
             lang = feat['language']
             
-            db_file = db.query(models.File).filter(
-                models.File.project_id == project.id,
-                models.File.path == file_path
-            ).first()
-            
-            if not db_file:
-                db_file = models.File(project_id=project.id, path=file_path, language=lang)
-                db.add(db_file)
-                db.commit()
-                db.refresh(db_file)
+            db_file_id = file_path_to_id.get(file_path)
+            if not db_file_id:
+                continue
                 
             # predict
             pred_results = engine.predict([feat])
@@ -68,7 +83,7 @@ def run_analysis(run_id: int):
                     p['confidence_note'] = (p.get('confidence_note', '') + " | SECRET DETECTED").strip()
                     
                 prediction = models.Prediction(
-                    file_id=db_file.id,
+                    file_id=db_file_id,
                     run_id=run.id,
                     function_name=p['function_name'],
                     language=p['language'],
@@ -78,7 +93,33 @@ def run_analysis(run_id: int):
                     explanation_json=str(p['explanation'])
                 )
                 db.add(prediction)
-        
+
+        # Save hotspots
+        for h in all_hotspots:
+            h_path = os.path.abspath(h.get('file_path'))
+            file_id = file_path_to_id.get(h_path)
+            # If a file had hotspots but no functions, we already mapped it above because pending_files_by_path 
+            # loaded all pending files. So file_id should be there.
+            if not file_id:
+                # Fallback just in case
+                rel_path = os.path.relpath(h.get('file_path'), start=storage_path)
+                db_file = db.query(models.File).filter(models.File.project_id == project.id, models.File.path == rel_path).first()
+                if db_file:
+                    file_id = db_file.id
+                    file_path_to_id[h_path] = file_id
+            
+            if file_id:
+                hotspot = models.Hotspot(
+                    run_id=run.id,
+                    file_id=file_id,
+                    start_line=h.get('start_line'),
+                    end_line=h.get('end_line'),
+                    severity=h.get('severity'),
+                    rule_id=h.get('rule_id'),
+                    message=h.get('message')
+                )
+                db.add(hotspot)
+                
         run.status = "completed"
         db.commit()
     except Exception as e:

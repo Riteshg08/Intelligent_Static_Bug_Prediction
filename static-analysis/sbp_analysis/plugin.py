@@ -57,3 +57,7 @@ class LanguagePlugin(ABC):
     @abstractmethod
     def comment_nodes(self) -> Set[str]:
         pass
+
+    def analyze_hotspots(self, root_node, source_code: bytes) -> list:
+        """Return a list of dicts with keys: start_line, end_line, severity, rule_id, message."""
+        return []
