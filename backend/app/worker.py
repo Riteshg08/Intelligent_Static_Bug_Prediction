@@ -38,8 +38,8 @@ def run_analysis(run_id: int):
         
         project = db.query(models.Project).filter(models.Project.id == run.project_id).first()
         
-        # Analyze project files
-        storage_path = f"../storage/projects/{project.id}"
+        storage_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../storage"))
+        storage_path = os.path.join(storage_base, f"projects/{project.id}")
         
         # We can extract features
         # We can extract features

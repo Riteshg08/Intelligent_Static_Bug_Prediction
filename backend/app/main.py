@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
@@ -17,6 +18,14 @@ from .worker import task_queue, run_analysis
 from . import models, database
 
 app = FastAPI(title="Intelligent Static Bug Prediction API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -145,7 +154,11 @@ async def create_project(name: str = Form(...), file: UploadFile = FastAPIFile(.
     db.commit()
     db.refresh(project)
     
-    storage_path = f"../storage/projects/{project.id}"
+    import tempfile
+    
+    # Store in project-scoped directory
+    storage_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../storage"))
+    storage_path = os.path.join(storage_base, f"projects/{project.id}")
     os.makedirs(storage_path, exist_ok=True)
     
     file_location = os.path.join(storage_path, file.filename)
