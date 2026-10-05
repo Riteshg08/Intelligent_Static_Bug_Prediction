@@ -1,4 +1,5 @@
 import os
+import json
 import zipfile
 import tarfile
 from redis import Redis
@@ -90,7 +91,7 @@ def run_analysis(run_id: int):
                     risk_score=p['risk_score'],
                     risk_level=p['risk_level'],
                     confidence_note=p['confidence_note'],
-                    explanation_json=str(p['explanation'])
+                    explanation_json=json.dumps(p['explanation'])
                 )
                 db.add(prediction)
 

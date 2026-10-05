@@ -206,6 +206,12 @@ export default function ProjectViewer() {
                     {findingsCount === 0 && f.status === 'analyzed' && (
                       <span className="flex-shrink-0 ml-2 text-[10px] text-green-500"><CheckCircle2 className="w-4 h-4" /></span>
                     )}
+                    {f.status === 'skipped' && (
+                      <span className="flex-shrink-0 ml-2 px-1 text-[9px] bg-orange-100 text-orange-600 rounded">skipped</span>
+                    )}
+                    {f.status === 'unsupported' && (
+                      <span className="flex-shrink-0 ml-2 px-1 text-[9px] bg-gray-200 text-gray-500 rounded">unsupported</span>
+                    )}
                   </button>
                 )
               })}

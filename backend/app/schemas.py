@@ -83,7 +83,7 @@ class PredictionReportResponse(BaseModel):
     risk_score: float
     risk_level: str
     confidence_note: Optional[str] = None
-    explanation: Dict[str, Any]
+    explanation: Any
     hotspots: List[Hotspot]
     file_id: int
 

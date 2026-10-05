@@ -33,6 +33,8 @@ def analyze_directory(directory: str) -> Tuple[pd.DataFrame, list]:
                 # Count file imports
                 parser = Parser(plugin.tree_sitter_language)
                 tree = parser.parse(content_bytes)
+                if tree.root_node.has_error:
+                    raise Exception("Syntax error detected")
                 import_nodes = plugin.import_nodes
                 import_count = 0
                 def count_imports(node):
