@@ -102,90 +102,69 @@ export default function Dashboard() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 p-8 pt-6">
-      <div className="flex items-center text-sm text-gray-500 mb-2">
+      <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
         <span>Workspace</span>
         <span className="mx-2">&gt;</span>
-        <span className="text-gray-900 font-medium">Projects</span>
+        <span className="text-gray-900 dark:text-white font-medium">Projects</span>
       </div>
       
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-slate-800">Projects</h1>
-        <button onClick={() => setShowUpload(!showUpload)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium flex items-center shadow-sm">
-          <Plus className="w-4 h-4 mr-1.5" />
-          New analysis
-        </button>
+        <h1 className="text-3xl font-bold text-slate-800 dark:text-white">Projects</h1>
       </div>
 
-      <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-md flex mb-8 text-sm">
+      <div className="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-4 rounded-r-md flex mb-8 text-sm">
         <Info className="w-5 h-5 text-blue-500 mr-2 shrink-0" />
-        <span className="text-blue-900"><span className="font-semibold">Risk scores are predictions, not confirmed bugs.</span> Treat probabilities as triage signals and verify findings in context.</span>
+        <span className="text-blue-900 dark:text-blue-200"><span className="font-semibold">Risk scores are predictions, not confirmed bugs.</span> Treat probabilities as triage signals and verify findings in context.</span>
       </div>
       
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-md flex mb-8 text-sm">
+        <div className="bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 p-4 rounded-r-md flex mb-8 text-sm">
           <AlertTriangle className="w-5 h-5 text-red-500 mr-2 shrink-0" />
           <span className="text-red-900">{error}</span>
         </div>
       )}
 
-      {showUpload && (
-        <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8 p-6 border border-gray-200">
-          <h2 className="text-lg font-medium mb-4">Upload New Codebase</h2>
-          <form onSubmit={handleUpload} className="flex gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Project Name</label>
-              <input type="text" required value={name} onChange={e => setName(e.target.value)} className="mt-1 p-2 border border-gray-300 rounded-md w-64" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Zip/Tar File</label>
-              <input type="file" required onChange={e => setFile(e.target.files[0])} className="mt-1" />
-            </div>
-            <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 shadow-sm">Upload</button>
-          </form>
-        </div>
-      )}
-
       {/* Top Cards */}
       <div className="grid grid-cols-4 gap-4 mb-10">
-        <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between h-28">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500">Projects</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Projects</span>
             <Folder className="w-5 h-5 text-gray-400" />
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800">{projects.length}</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{projects.length}</div>
             <div className="text-xs text-gray-400 mt-1">Across your workspace</div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between h-28">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500">High risk</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">High risk</span>
             <div className="w-6 h-6 rounded-full border border-red-500 flex items-center justify-center">
               <span className="text-red-500 font-bold text-xs">!</span>
             </div>
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800">{totalHigh}</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{totalHigh}</div>
             <div className="text-xs text-gray-400 mt-1">Review these first</div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between h-28">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500">Medium risk</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Medium risk</span>
             <AlertTriangle className="w-5 h-5 text-amber-500" />
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800">{totalMedium}</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{totalMedium}</div>
             <div className="text-xs text-gray-400 mt-1">Worth a closer look</div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between h-28">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500">Low risk</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Low risk</span>
             <CheckCircle2 className="w-5 h-5 text-green-500" />
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800">{totalLow}</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{totalLow}</div>
             <div className="text-xs text-gray-400 mt-1">4 recent analyses</div>
           </div>
         </div>
@@ -193,44 +172,36 @@ export default function Dashboard() {
 
       <div className="flex justify-between items-end mb-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Your projects</h2>
-          <p className="text-sm text-gray-500">Source analyses and recent risk counts</p>
-        </div>
-        <div className="flex space-x-2">
-          <button className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 shadow-sm">
-            All results
-          </button>
-          <button className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 shadow-sm flex items-center">
-            <span className="font-mono text-xs mr-1">&lt;/&gt;</span> Open workbench
-          </button>
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white">Your projects</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Source analyses and recent risk counts</p>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
         {projects.map(project => (
-          <div key={project.id} onClick={() => viewProject(project.id)} className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md cursor-pointer transition-shadow flex flex-col h-48 relative">
+          <div key={project.id} onClick={() => viewProject(project.id)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm hover:shadow-md cursor-pointer transition-shadow flex flex-col h-48 relative">
             <div className="flex justify-between items-start mb-3">
-              <div className="w-8 h-8 rounded bg-indigo-50 flex items-center justify-center">
+              <div className="w-8 h-8 rounded bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
                 <Folder className="w-4 h-4 text-indigo-500" />
               </div>
               <div className="relative">
                 <button 
                   onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === project.id ? null : project.id); }}
-                  className="text-gray-400 hover:text-gray-600 focus:outline-none"
+                  className="text-gray-400 hover:text-gray-600 dark:text-gray-300 focus:outline-none"
                 >
                   <MoreHorizontal className="w-5 h-5" />
                 </button>
                 {openMenuId === project.id && (
-                  <div className="absolute right-0 mt-2 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-10 overflow-hidden">
+                  <div className="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10 overflow-hidden">
                     <button
                       onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); viewProject(project.id); }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-medium"
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 font-medium"
                     >
                       Open
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}
-                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium border-t border-gray-100"
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:bg-red-900/30 font-medium border-t border-gray-100"
                     >
                       Delete
                     </button>
@@ -240,12 +211,12 @@ export default function Dashboard() {
             </div>
             
             <div className="flex items-center mb-2">
-              <h3 className="text-base font-bold text-gray-900 mr-2 truncate">{project.name}</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mr-2 truncate">{project.name}</h3>
             </div>
             
             <div className="flex flex-wrap gap-1 mb-4">
               {(project.languages || []).map(lang => (
-                <span key={lang} className="text-xs bg-gray-50 text-gray-600 px-1.5 py-0.5 border border-gray-200 rounded">
+                <span key={lang} className="text-xs bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded">
                   {lang}
                 </span>
               ))}
@@ -280,15 +251,18 @@ export default function Dashboard() {
       </div>
       
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Loading projects...</div>
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading projects...</div>
       ) : projects.length === 0 && !showUpload && (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200 shadow-sm mt-4">
+        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm mt-4">
           <Folder className="mx-auto h-12 w-12 text-gray-300" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No projects</h3>
-          <p className="mt-1 text-sm text-gray-500">Get started by creating a new analysis.</p>
+          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No projects</h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Get started by creating a new analysis.</p>
           <div className="mt-6">
             <button
-              onClick={() => setShowUpload(true)}
+              onClick={() => {
+                const headerBtn = document.getElementById('new-scan-btn');
+                if (headerBtn) (headerBtn as HTMLElement).click();
+              }}
               className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
             >
               <Plus className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />

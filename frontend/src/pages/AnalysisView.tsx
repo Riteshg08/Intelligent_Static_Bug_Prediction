@@ -57,10 +57,10 @@ export default function AnalysisView() {
 
   const getRiskColor = (level, bg = false) => {
     level = level.toLowerCase();
-    if (level === 'high') return bg ? 'bg-red-50 text-red-700 border-red-200' : '#ef4444';
-    if (level === 'medium' || level === 'warning') return bg ? 'bg-amber-50 text-amber-700 border-amber-200' : '#f59e0b';
-    if (level === 'low' || level === 'info') return bg ? 'bg-green-50 text-green-700 border-green-200' : '#22c55e';
-    return bg ? 'bg-gray-50 text-gray-700 border-gray-200' : '#6b7280';
+    if (level === 'high') return bg ? 'bg-red-50 dark:bg-red-900/30 text-red-700 border-red-200' : '#ef4444';
+    if (level === 'medium' || level === 'warning') return bg ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 border-amber-200' : '#f59e0b';
+    if (level === 'low' || level === 'info') return bg ? 'bg-green-50 dark:bg-green-900/30 text-green-700 border-green-200' : '#22c55e';
+    return bg ? 'bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700' : '#6b7280';
   };
 
   const filteredPredictions = predictions.filter(p => 
@@ -89,27 +89,27 @@ export default function AnalysisView() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 p-8 pt-6 overflow-y-auto">
-      <div className="flex items-center text-sm text-gray-500 mb-2">
+      <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
         <span>Workspace</span>
         <span className="mx-2">&gt;</span>
-        <span className="text-gray-900 font-medium">Analysis results</span>
+        <span className="text-gray-900 dark:text-white font-medium">Analysis results</span>
       </div>
       
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-slate-800">Analysis results</h1>
-        <button onClick={handleExport} disabled={exporting || status !== 'completed' && status !== 'analyzed'} className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium flex items-center shadow-sm disabled:opacity-50">
+        <h1 className="text-3xl font-bold text-slate-800 dark:text-white">Analysis results</h1>
+        <button onClick={handleExport} disabled={exporting || status !== 'completed' && status !== 'analyzed'} className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md font-medium flex items-center shadow-sm disabled:opacity-50">
           <Download className="w-4 h-4 mr-1.5" />
           {exporting ? 'Exporting...' : 'Export JSON'}
         </button>
       </div>
 
-      <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-md flex mb-8 text-sm">
+      <div className="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-4 rounded-r-md flex mb-8 text-sm">
         <Info className="w-5 h-5 text-blue-500 mr-2 shrink-0" />
-        <span className="text-blue-900"><span className="font-semibold">Risk scores are predictions, not confirmed bugs.</span> Treat probabilities as triage signals and verify findings in context.</span>
+        <span className="text-blue-900 dark:text-blue-200"><span className="font-semibold">Risk scores are predictions, not confirmed bugs.</span> Treat probabilities as triage signals and verify findings in context.</span>
       </div>
 
       {(status === 'queued' || status === 'running') && (
-        <div className="bg-white p-6 rounded-md shadow-sm border border-gray-200 mb-6 flex flex-col items-center">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-md shadow-sm border border-gray-200 dark:border-gray-700 mb-6 flex flex-col items-center">
           <div className="flex items-center text-indigo-600 font-bold mb-4">
             <span className="animate-pulse mr-2 h-3 w-3 rounded-full bg-indigo-600"></span>
             Analysis running...
@@ -122,45 +122,45 @@ export default function AnalysisView() {
 
       {/* Top Cards */}
       <div className="grid grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between h-28">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500">Functions analyzed</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Functions analyzed</span>
             <Activity className="w-5 h-5 text-gray-400" />
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800">{totalFunctions}</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{totalFunctions}</div>
             <div className="text-xs text-gray-400 mt-1">Across {languages.length} source languages</div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between h-28">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500">High risk</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">High risk</span>
             <div className="w-6 h-6 rounded-full border border-red-500 flex items-center justify-center">
               <span className="text-red-500 font-bold text-xs">!</span>
             </div>
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800">{highRiskCount}</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{highRiskCount}</div>
             <div className="text-xs text-gray-400 mt-1">65% probability and above</div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between h-28">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500">Medium risk</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Medium risk</span>
             <AlertTriangle className="w-5 h-5 text-amber-500" />
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800">{mediumRiskCount}</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{mediumRiskCount}</div>
             <div className="text-xs text-gray-400 mt-1">35-64% estimated probability</div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between h-28">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500">Low risk</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Low risk</span>
             <CheckCircle2 className="w-5 h-5 text-green-500" />
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800">{lowRiskCount}</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{lowRiskCount}</div>
             <div className="text-xs text-gray-400 mt-1">Below 35% estimated probability</div>
           </div>
         </div>
@@ -168,11 +168,11 @@ export default function AnalysisView() {
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Main Table Area */}
-        <div className="flex-1 flex flex-col bg-white border border-gray-200 rounded-lg shadow-sm">
-          <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-800">Function risk ranking</h2>
-              <p className="text-sm text-gray-500">Highest estimated probabilities first</p>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white">Function risk ranking</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Highest estimated probabilities first</p>
             </div>
             <div className="flex items-center space-x-3">
               <div className="relative">
@@ -182,22 +182,16 @@ export default function AnalysisView() {
                   placeholder="Search functions..." 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 w-48"
+                  className="pl-9 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 w-48"
                 />
               </div>
-              <select className="border border-gray-300 rounded-md text-sm py-1.5 px-3 bg-white text-gray-700 outline-none">
-                <option>All</option>
-              </select>
-              <select className="border border-gray-300 rounded-md text-sm py-1.5 px-3 bg-white text-gray-700 outline-none">
-                <option>All</option>
-              </select>
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-50">
+                <tr className="border-b border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-900">
                   <th className="px-6 py-3 font-medium">Function ↑↓</th>
                   <th className="px-6 py-3 font-medium">File</th>
                   <th className="px-6 py-3 font-medium">Language ↑↓</th>
@@ -206,23 +200,23 @@ export default function AnalysisView() {
                   <th className="px-6 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
+              <tbody className="divide-y divide-gray-100 bg-white dark:bg-gray-800">
                 {filteredPredictions.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={p.id} className="hover:bg-gray-50 dark:bg-gray-900 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-bold text-gray-900">{p.function_name}</div>
+                      <div className="font-bold text-gray-900 dark:text-white">{p.function_name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">L{p.start_line}-{p.end_line}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{p.file_path || 'Unknown'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{p.file_path || 'Unknown'}</td>
                     <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs rounded border border-gray-200">{p.language}</span>
+                      <span className="px-2.5 py-1 bg-gray-100 text-gray-600 dark:text-gray-300 text-xs rounded border border-gray-200 dark:border-gray-700">{p.language}</span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center">
                         <div className="w-24 bg-gray-200 rounded-full h-1.5 mr-3 overflow-hidden">
                           <div className="h-1.5 rounded-full" style={{ width: `${p.risk_score * 100}%`, backgroundColor: getRiskColor(p.risk_level) }}></div>
                         </div>
-                        <span className="font-bold text-gray-700 text-sm">{(p.risk_score * 100).toFixed(0)}%</span>
+                        <span className="font-bold text-gray-700 dark:text-gray-200 text-sm">{(p.risk_score * 100).toFixed(0)}%</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -243,7 +237,7 @@ export default function AnalysisView() {
               </tbody>
             </table>
             {filteredPredictions.length === 0 && status !== 'queued' && status !== 'running' && (
-              <div className="text-center py-10 text-gray-500">
+              <div className="text-center py-10 text-gray-500 dark:text-gray-400">
                 No functions match the criteria.
               </div>
             )}
@@ -252,9 +246,9 @@ export default function AnalysisView() {
 
         {/* Right Sidebar Charts */}
         <div className="w-full lg:w-72 flex flex-col gap-6 shrink-0">
-          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
-            <h3 className="font-bold text-gray-900 text-base mb-1">Risk distribution</h3>
-            <p className="text-xs text-gray-500 mb-6">Function-level predictions</p>
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm">
+            <h3 className="font-bold text-gray-900 dark:text-white text-base mb-1">Risk distribution</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Function-level predictions</p>
             
             <div className="flex items-center justify-between">
               <div className="relative w-20 h-20">
@@ -269,28 +263,28 @@ export default function AnalysisView() {
                   )}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-lg font-bold text-slate-800 leading-none">{totalFunctions}</span>
-                  <span className="text-[9px] text-gray-500 mt-1 uppercase tracking-wider">Functions</span>
+                  <span className="text-lg font-bold text-slate-800 dark:text-white leading-none">{totalFunctions}</span>
+                  <span className="text-[9px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wider">Functions</span>
                 </div>
               </div>
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center text-gray-700">
+                  <div className="flex items-center text-gray-700 dark:text-gray-200">
                     <div className="w-3 h-3 rounded-full border border-red-500 flex items-center justify-center mr-2"><span className="text-[8px] font-bold text-red-500">!</span></div>
                     High
                   </div>
                   <span className="font-medium ml-4">{highRiskCount}/{totalFunctions}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center text-gray-700">
+                  <div className="flex items-center text-gray-700 dark:text-gray-200">
                     <AlertTriangle className="w-3 h-3 text-amber-500 mr-2" />
                     Medium
                   </div>
                   <span className="font-medium ml-4">{mediumRiskCount}/{totalFunctions}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center text-gray-700">
+                  <div className="flex items-center text-gray-700 dark:text-gray-200">
                     <CheckCircle2 className="w-3 h-3 text-green-500 mr-2" />
                     Low
                   </div>
@@ -300,24 +294,24 @@ export default function AnalysisView() {
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm">
             <div className="flex justify-between items-start mb-1">
               <div>
-                <h3 className="font-bold text-gray-900 text-base">Highest score</h3>
-                <p className="text-xs text-gray-500 mb-6">Current project maximum</p>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base">Highest score</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Current project maximum</p>
               </div>
-              <div className="text-indigo-600 bg-indigo-50 p-1.5 rounded">
+              <div className="text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 p-1.5 rounded">
                 <Activity className="w-4 h-4" />
               </div>
             </div>
             
-            <div className="mb-2 text-3xl font-bold text-slate-800 text-right">
+            <div className="mb-2 text-3xl font-bold text-slate-800 dark:text-white text-right">
               {(maxScore * 100).toFixed(0)}%
             </div>
-            <div className="font-bold text-gray-800 text-sm mb-3 text-right">{maxScoreFunc}</div>
+            <div className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-3 text-right">{maxScoreFunc}</div>
             
             <div className="w-full bg-gray-100 rounded-full h-2">
-              <div className="bg-red-500 h-2 rounded-full" style={{ width: `${maxScore * 100}%` }}></div>
+              <div className="bg-red-50 dark:bg-red-900/300 h-2 rounded-full" style={{ width: `${maxScore * 100}%` }}></div>
             </div>
           </div>
         </div>

@@ -115,6 +115,8 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api/v1'
 });
 
+import toast from 'react-hot-toast';
+
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token && config.headers) {
@@ -129,6 +131,9 @@ api.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/login';
+    } else {
+      const msg = error.response?.data?.detail || error.message || "An error occurred";
+      toast.error(msg);
     }
     return Promise.reject(error);
   }
