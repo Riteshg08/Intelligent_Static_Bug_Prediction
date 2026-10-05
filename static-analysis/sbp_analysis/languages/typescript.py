@@ -66,3 +66,71 @@ class TypeScriptPlugin(LanguagePlugin):
     @property
     def comment_nodes(self) -> Set[str]:
         return {"comment"}
+    def _analyze_node(self, node, source_code: bytes, hotspots: list):
+        if node.type == "catch_clause":
+            body = node.child_by_field_name("body")
+            if body and len(body.named_children) == 0:
+                hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "empty-catch", "message": "Empty catch block may swallow unexpected errors"})
+                
+        if node.type == "binary_expression":
+            op = node.child_by_field_name("operator")
+            if op and op.type in ("==", "!="):
+                hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "loose-equality", "message": "Use strict equality (=== or !==) instead of loose equality"})
+            
+            if op and op.type == "<=":
+                right = node.child_by_field_name("right")
+                if right and right.type == "member_expression":
+                    prop = right.child_by_field_name("property")
+                    if prop and prop.type == "property_identifier" and source_code[prop.start_byte:prop.end_byte] == b"length":
+                        hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "loop-off-by-one", "message": "Loop condition uses <= with length, possible off-by-one error"})
+            
+            # always true e.g. a || "literal"
+            if op and op.type == "||":
+                right = node.child_by_field_name("right")
+                if right and right.type in ("string", "number", "true"):
+                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "always-true", "message": "Condition with literal OR is always true"})
+
+        if node.type == "assignment_expression":
+            parent = node.parent
+            while parent and parent.type == "parenthesized_expression":
+                parent = parent.parent
+            if parent and parent.type == "if_statement":
+                hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "assignment-in-condition", "message": "Assignment inside a condition is likely a typo for equality"})
+
+        # noop comparison e.g. cost == 0;
+        if node.type == "expression_statement":
+            if node.named_children and node.named_children[0].type == "binary_expression":
+                op = node.named_children[0].child_by_field_name("operator")
+                if op and op.type in ("==", "===", "!=", "!==", ">", "<", ">=", "<="):
+                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "noop-comparison", "message": "Comparison used as a statement has no effect"})
+                    
+        # hardcoded secrets
+        if node.type == "variable_declarator":
+            name = node.child_by_field_name("name")
+            val = node.child_by_field_name("value")
+            if name and val and name.type == "identifier" and val.type == "string":
+                var_name = source_code[name.start_byte:name.end_byte].decode('utf-8').lower()
+                if any(x in var_name for x in ["password", "secret", "key", "token"]):
+                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "hardcoded-secret", "message": "Hardcoded secret detected"})
+                    
+        # eval / exec
+        if node.type == "call_expression":
+            func = node.child_by_field_name("function")
+            if func and func.type == "identifier":
+                name = source_code[func.start_byte:func.end_byte].decode('utf-8')
+                if name == "eval":
+                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "insecure-eval", "message": "Insecure use of eval() function"})
+                    
+        # switch fall-through
+        if node.type == "switch_statement":
+            body = node.child_by_field_name("body")
+            if body and body.type == "switch_body":
+                cases = body.named_children
+                for i, case in enumerate(cases[:-1]):
+                    has_break = False
+                    for c in case.children:
+                        if c.type in ("break_statement", "return_statement", "throw_statement", "continue_statement"):
+                            has_break = True
+                            break
+                    if not has_break and sum(1 for c in case.children if c.is_named and c.type not in ("switch_case", "switch_default")) > 0:
+                        hotspots.append({"start_line": case.start_point[0] + 1, "end_line": case.end_point[0] + 1, "severity": "warning", "rule_id": "switch-fall-through", "message": "Switch case falls through without break"})

@@ -53,59 +53,65 @@ class JavaPlugin(LanguagePlugin):
     def comment_nodes(self) -> Set[str]:
         return {"block_comment", "line_comment"}
 
-    def analyze_hotspots(self, root_node, source_code: bytes) -> list:
-        hotspots = []
-        nesting_nodes = self.nesting_nodes
-
-        def walk(node, depth):
-            if node.type in nesting_nodes:
-                new_depth = depth + 1
-                if new_depth == 4:
-                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "deep-nesting", "message": "Deeply nested code (depth >= 4)"})
-                elif new_depth == 6:
-                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "very-deep-nesting", "message": "Very deeply nested code (depth >= 6)"})
-            else:
-                new_depth = depth
+    def _analyze_node(self, node, source_code: bytes, hotspots: list):
+        if node.type == "catch_clause":
+            body = node.child_by_field_name("body")
+            if body and len(body.named_children) == 0:
+                hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "empty-catch", "message": "Empty catch block may swallow unexpected errors"})
                 
-            if node.type == "formal_parameters":
-                count = sum(1 for c in node.named_children if c.type == "formal_parameter")
-                if count >= 6:
-                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "long-parameter-list", "message": "Long parameter list (>= 6 parameters)"})
-                    
-            if node.type == "catch_clause":
-                body = node.child_by_field_name("body")
-                if body and len(body.named_children) == 0:
-                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "empty-catch", "message": "Empty catch block may swallow unexpected errors"})
-                    
-            if node.type == "binary_expression":
-                op = node.child_by_field_name("operator")
-                if op and op.type == "==":
-                    left = node.child_by_field_name("left")
-                    right = node.child_by_field_name("right")
-                    if (left and left.type == "string_literal") or (right and right.type == "string_literal"):
-                        hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "wrong-equality", "message": "Use .equals() for string comparison instead of =="})
-                    
-                if op and op.type == "<=":
-                    right = node.child_by_field_name("right")
-                    if right and right.type == "field_access":
-                        prop = right.child_by_field_name("field")
-                        if prop and prop.type == "identifier" and source_code[prop.start_byte:prop.end_byte] == b"length":
-                            hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "loop-off-by-one", "message": "Loop condition uses <= with length, possible off-by-one error"})
-                            
-            if node.type == "assignment_expression":
-                parent = node.parent
-                while parent and parent.type == "parenthesized_expression":
-                    parent = parent.parent
-                if parent and parent.type == "if_statement":
-                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "assignment-in-condition", "message": "Assignment inside a condition is likely a typo for equality"})
+        if node.type == "binary_expression":
+            op = node.child_by_field_name("operator")
+            if op and op.type == "==":
+                left = node.child_by_field_name("left")
+                right = node.child_by_field_name("right")
+                if (left and left.type == "string_literal") or (right and right.type == "string_literal"):
+                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "wrong-equality", "message": "Use .equals() for string comparison instead of =="})
+                
+            if op and op.type == "<=":
+                right = node.child_by_field_name("right")
+                if right and right.type == "field_access":
+                    prop = right.child_by_field_name("field")
+                    if prop and prop.type == "identifier" and source_code[prop.start_byte:prop.end_byte] == b"length":
+                        hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "loop-off-by-one", "message": "Loop condition uses <= with length, possible off-by-one error"})
+                        
+            # always true e.g. a || true
+            if op and op.type == "||":
+                right = node.child_by_field_name("right")
+                if right and right.type in ("string_literal", "true"):
+                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "always-true", "message": "Condition with literal OR is always true"})
+                        
+        if node.type == "assignment_expression":
+            parent = node.parent
+            while parent and parent.type == "parenthesized_expression":
+                parent = parent.parent
+            if parent and parent.type == "if_statement":
+                hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "assignment-in-condition", "message": "Assignment inside a condition is likely a typo for equality"})
 
-            if node.type in ("method_declaration", "constructor_declaration"):
-                length = node.end_point[0] - node.start_point[0] + 1
-                if length > 30.0:
-                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "long-function", "message": "Function is unusually long (>95th percentile)"})
-
-            for child in node.children:
-                walk(child, new_depth)
-
-        walk(root_node, 0)
-        return hotspots
+        # noop comparison e.g. cost == 0;
+        if node.type == "expression_statement":
+            if node.named_children and node.named_children[0].type == "binary_expression":
+                op = node.named_children[0].child_by_field_name("operator")
+                if op and op.type in ("==", "!=", ">", "<", ">=", "<="):
+                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "noop-comparison", "message": "Comparison used as a statement has no effect"})
+                    
+        # hardcoded secrets
+        if node.type == "variable_declarator":
+            name = node.child_by_field_name("name")
+            val = node.child_by_field_name("value")
+            if name and val and name.type == "identifier" and val.type == "string_literal":
+                var_name = source_code[name.start_byte:name.end_byte].decode('utf-8').lower()
+                if any(x in var_name for x in ["password", "secret", "key", "token"]):
+                    hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "hardcoded-secret", "message": "Hardcoded secret detected"})
+                    
+        # switch fall-through
+        if node.type == "switch_block":
+            cases = node.named_children
+            for i, case in enumerate(cases[:-1]):
+                has_break = False
+                for c in case.children:
+                    if c.type in ("break_statement", "return_statement", "throw_statement", "yield_statement"):
+                        has_break = True
+                        break
+                # Only a finding if it actually has statements
+                if not has_break and sum(1 for c in case.children if c.is_named and c.type != "switch_label") > 0:
+                    hotspots.append({"start_line": case.start_point[0] + 1, "end_line": case.end_point[0] + 1, "severity": "warning", "rule_id": "switch-fall-through", "message": "Switch case falls through without break"})
