@@ -48,6 +48,13 @@ class AnalysisRun(Base):
     status = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    files_total = Column(Integer, default=0)
+    files_done = Column(Integer, default=0)
+    files_skipped = Column(Integer, default=0)
+    skipped_reasons = Column(String, default="{}")  # JSON string
+    functions_found = Column(Integer, default=0)
+    error_message = Column(String, nullable=True)
+    
     project = relationship("Project", back_populates="runs")
     predictions = relationship("Prediction", back_populates="run")
 
@@ -101,6 +108,9 @@ class Feedback(Base):
     prediction_id = Column(Integer, ForeignKey("predictions.id"), unique=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     is_real_bug = Column(Boolean)
+    comment = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     prediction = relationship("Prediction", back_populates="feedback")
     user = relationship("User", back_populates="feedbacks")

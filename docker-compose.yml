@@ -1,21 +1,39 @@
 version: '3.8'
 
+x-env: &env
+  DATABASE_URL: ${DATABASE_URL:-postgresql://sbp_user:sbp_password@db:5432/sbp_db}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  SECRET_KEY: ${SECRET_KEY:-supersecret}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+  QUEUE_NAME: ${QUEUE_NAME:-sbp_tasks}
+  ENV: ${ENV:-production}
+
 services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_USER: sbp_user
-      POSTGRES_PASSWORD: sbp_password
-      POSTGRES_DB: sbp_db
+      POSTGRES_USER: ${POSTGRES_USER:-sbp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sbp_password}
+      POSTGRES_DB: ${POSTGRES_DB:-sbp_db}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-sbp_user} -d $${POSTGRES_DB:-sbp_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       
   redis:
     image: redis:7
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -24,13 +42,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://sbp_user:sbp_password@db:5432/sbp_db
-      - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET=supersecret
-      - FRONTEND_URL=http://localhost:5173
+      <<: *env
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: >
       bash -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
@@ -39,14 +56,17 @@ services:
       context: .
       dockerfile: backend.Dockerfile
     environment:
-      - DATABASE_URL=postgresql://sbp_user:sbp_password@db:5432/sbp_db
-      - REDIS_URL=redis://redis:6379/0
-      - PYTHONPATH=/app/backend
+      <<: *env
+      PYTHONPATH: /app/backend
     depends_on:
-      - db
-      - redis
-      - backend
-    command: rq worker sbp_tasks
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: rq worker ${QUEUE_NAME:-sbp_tasks}
+    volumes:
+      - ./static-analysis:/app/static-analysis
+      - ./models:/app/models
 
   frontend:
     build:
@@ -55,7 +75,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000/api/v1
+      - VITE_API_URL=${FRONTEND_URL:-http://localhost:8000}/api/v1
     depends_on:
       - backend
     volumes:

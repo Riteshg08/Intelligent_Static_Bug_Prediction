@@ -14,12 +14,16 @@ from sbp_analysis.cli import analyze_directory
 from sbp_predict.engine import PredictionEngine
 import re
 
-redis_conn = Redis(host=os.getenv("REDIS_HOST", "localhost"), port=6379)
-task_queue = Queue("analysis", connection=redis_conn)
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+QUEUE_NAME = os.getenv("QUEUE_NAME", "sbp_tasks")
+redis_conn = Redis.from_url(REDIS_URL)
+task_queue = Queue(QUEUE_NAME, connection=redis_conn)
 
 default_models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models"))
-models_dir = os.getenv("MODELS_DIR", default_models_dir)
+models_dir = os.path.abspath(os.getenv("MODELS_DIR", default_models_dir))
 engine = PredictionEngine(models_dir=models_dir)
+default_storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../storage"))
+STORAGE_DIR = os.path.abspath(os.getenv("STORAGE_DIR", default_storage_dir))
 def detect_secrets(file_path):
     secrets_found = False
     with open(file_path, 'r', errors='ignore') as f:
@@ -40,8 +44,7 @@ def run_analysis(run_id: int):
         
         project = db.query(models.Project).filter(models.Project.id == run.project_id).first()
         
-        storage_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../storage"))
-        storage_path = os.path.join(storage_base, f"projects/{project.id}")
+        storage_path = os.path.join(STORAGE_DIR, f"projects/{project.id}")
         
         # We can extract features
         # We can extract features
@@ -64,7 +67,10 @@ def run_analysis(run_id: int):
                 db_f.status = "analyzed"
             db.add(db_f)
             file_path_to_id[f_path] = db_f.id
-            print(f"DEBUG: Mapping {f_path} to db_file_id {db_f.id}")
+        
+        run.files_total = len(pending_files_by_path)
+        run.files_skipped = len(skipped_paths)
+        run.skipped_reasons = json.dumps({p[0]: p[1] for p in skipped_files_list})
         db.commit()
 
         print(f"DEBUG: Found {len(features)} features")
@@ -120,15 +126,17 @@ def run_analysis(run_id: int):
                     explanation_json=json.dumps(p['explanation'])
                 )
                 db.add(prediction)
+                run.functions_found += 1
+            
+            # Incremental updates per feature loop is too granular, let's update per file if needed
+            # Actually, `features` is a list of functions, we can just commit periodically or at the end
+            db.commit()
 
         # Save hotspots
         for h in all_hotspots:
             h_path = os.path.abspath(h.get('file_path'))
             file_id = file_path_to_id.get(h_path)
-            # If a file had hotspots but no functions, we already mapped it above because pending_files_by_path 
-            # loaded all pending files. So file_id should be there.
             if not file_id:
-                # Fallback just in case
                 rel_path = os.path.relpath(h.get('file_path'), start=storage_path)
                 db_file = db.query(models.File).filter(models.File.project_id == project.id, models.File.path == rel_path).first()
                 if db_file:
@@ -148,11 +156,13 @@ def run_analysis(run_id: int):
                 db.add(hotspot)
                 
         run.status = "completed"
+        run.files_done = len(file_path_to_id) - run.files_skipped
         db.commit()
     except Exception as e:
         run = db.query(models.AnalysisRun).filter(models.AnalysisRun.id == run_id).first()
         if run:
             run.status = "failed"
+            run.error_message = str(e)
             db.commit()
         print(f"Error in analysis: {e}")
     finally:

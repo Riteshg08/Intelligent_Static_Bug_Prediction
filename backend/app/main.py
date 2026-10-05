@@ -17,8 +17,26 @@ from .worker import task_queue, run_analysis
 
 from typing import List
 from . import models, database, schemas
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi import Request
+import json
+from pythonjsonlogger import jsonlogger
+
+# Structured JSON logging
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+logHandler.setFormatter(formatter)
+logger = logging.getLogger()
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
+
+limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="Intelligent Static Bug Prediction API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 origins = [url.strip() for url in frontend_url.split(",")]
@@ -31,10 +49,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-models.Base.metadata.create_all(bind=database.engine)
+# removed create_all so Alembic is the single source of truth
 
 # Security config
-SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if os.getenv("ENV", "development") != "development":
+        raise ValueError("SECRET_KEY must be set outside development environment.")
+    SECRET_KEY = "supersecretkey"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -82,10 +104,39 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    health_status = {"status": "ok", "db": "ok", "redis": "ok", "model": "ok"}
+    try:
+        db = database.SessionLocal()
+        db.execute(database.text("SELECT 1"))
+        db.close()
+    except Exception as e:
+        health_status["db"] = f"error: {str(e)}"
+        health_status["status"] = "error"
+        
+    try:
+        from .worker import redis_conn
+        redis_conn.ping()
+    except Exception as e:
+        health_status["redis"] = f"error: {str(e)}"
+        health_status["status"] = "error"
+        
+    try:
+        active_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../models/active.txt"))
+        if not os.path.exists(active_path):
+            active_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models/active.txt"))
+        if not os.path.exists(active_path):
+            health_status["model"] = "not loaded"
+    except Exception as e:
+        health_status["model"] = f"error: {str(e)}"
+        health_status["status"] = "error"
+        
+    if health_status["status"] != "ok":
+        raise HTTPException(status_code=503, detail=health_status)
+    return health_status
 
 @app.post("/api/v1/auth/register", response_model=Token)
-def register(user: UserCreate, db: Session = Depends(database.get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, user: UserCreate, db: Session = Depends(database.get_db)):
     db_user = db.query(models.User).filter(models.User.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
@@ -100,7 +151,8 @@ def register(user: UserCreate, db: Session = Depends(database.get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/api/v1/auth/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -195,47 +247,118 @@ def delete_project(project_id: int, current_user: models.User = Depends(get_curr
         
     return {"status": "success"}
 
+import tempfile
+import zipfile
+import tarfile
+from threading import Thread
+import logging
+
+logger = logging.getLogger(__name__)
+
+default_storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../storage"))
+STORAGE_DIR = os.path.abspath(os.getenv("STORAGE_DIR", default_storage_dir))
+MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 50 * 1024 * 1024)) # 50MB
+MAX_EXTRACTED_SIZE = int(os.getenv("MAX_EXTRACTED_SIZE", 200 * 1024 * 1024)) # 200MB
+MAX_FILES_COUNT = int(os.getenv("MAX_FILES_COUNT", 10000))
+ALLOWED_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".c", ".h", ".cpp", ".hpp", ".cc", ".cs", ".zip", ".tar.gz"}
+IGNORED_DIRS = {"node_modules", "vendor", "dist", "build", ".git"}
+MAX_COMPRESSION_RATIO = 100
+
+def is_safe_path(base_path, target_path, is_symlink=False):
+    if is_symlink:
+        return False
+    if os.path.isabs(target_path):
+        return False
+    resolved_target = os.path.abspath(os.path.join(base_path, target_path))
+    return resolved_target.startswith(os.path.abspath(base_path))
+
 @app.post("/api/v1/projects", response_model=schemas.ProjectCreateResponse)
-async def create_project(name: str = Form(...), file: UploadFile = FastAPIFile(...), current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+@limiter.limit("5/minute")
+async def create_project(request: Request, name: str = Form(...), file: UploadFile = FastAPIFile(...), current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+    # Check extension
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS and not (file.filename.endswith(".tar.gz") and ".tar.gz" in ALLOWED_EXTENSIONS):
+        raise HTTPException(status_code=400, detail=f"File extension {ext} not allowed.")
+        
     project = models.Project(name=name, owner_id=current_user.id)
     db.add(project)
     db.commit()
     db.refresh(project)
     
-    import tempfile
-    
-    # Store in project-scoped directory
-    storage_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../storage"))
-    storage_path = os.path.join(storage_base, f"projects/{project.id}")
+    storage_path = os.path.join(STORAGE_DIR, f"projects/{project.id}")
     os.makedirs(storage_path, exist_ok=True)
     
     file_location = os.path.join(storage_path, file.filename)
+    
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    
+    if file_size > MAX_UPLOAD_SIZE:
+        db.delete(project)
+        db.commit()
+        raise HTTPException(status_code=413, detail="Uploaded file is too large.")
+        
     with open(file_location, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # extract zip if needed
-    if file.filename.endswith(".zip"):
-        import zipfile
-        with zipfile.ZipFile(file_location, 'r') as zip_ref:
-            zip_ref.extractall(storage_path)
-            
-    # Remove the zip file itself if it was extracted
-    if file.filename.endswith(".zip"):
-        os.remove(file_location)
+    extracted_size = 0
+    extracted_files = 0
+    
+    try:
+        if file.filename.endswith(".zip"):
+            with zipfile.ZipFile(file_location, 'r') as zip_ref:
+                for zinfo in zip_ref.infolist():
+                    if zinfo.file_size > 0 and zinfo.compress_size > 0:
+                        ratio = zinfo.file_size / zinfo.compress_size
+                        if ratio > MAX_COMPRESSION_RATIO:
+                            raise HTTPException(status_code=400, detail="Zip bomb detected (high compression ratio).")
+                    if not is_safe_path(storage_path, zinfo.filename):
+                        raise HTTPException(status_code=400, detail="Zip slip vulnerability detected.")
+                    extracted_size += zinfo.file_size
+                    extracted_files += 1
+                    if extracted_size > MAX_EXTRACTED_SIZE or extracted_files > MAX_FILES_COUNT:
+                        raise HTTPException(status_code=413, detail="Extracted archive too large or too many files.")
+                zip_ref.extractall(storage_path)
+            os.remove(file_location)
+        elif file.filename.endswith(".tar.gz"):
+            with tarfile.open(file_location, 'r:gz') as tar_ref:
+                for member in tar_ref.getmembers():
+                    if member.islnk() or member.issym():
+                        raise HTTPException(status_code=400, detail="Symlinks not allowed in archive.")
+                    if not is_safe_path(storage_path, member.name):
+                        raise HTTPException(status_code=400, detail="Tar slip vulnerability detected.")
+                    extracted_size += member.size
+                    extracted_files += 1
+                    if extracted_size > MAX_EXTRACTED_SIZE or extracted_files > MAX_FILES_COUNT:
+                        raise HTTPException(status_code=413, detail="Extracted archive too large or too many files.")
+                tar_ref.extractall(storage_path)
+            os.remove(file_location)
+    except HTTPException:
+        db.delete(project)
+        db.commit()
+        shutil.rmtree(storage_path)
+        raise
+    except Exception as e:
+        db.delete(project)
+        db.commit()
+        shutil.rmtree(storage_path)
+        raise HTTPException(status_code=400, detail=f"Failed to process archive: {str(e)}")
 
-    # Register files right away
     extensions_to_lang = {
-        ".js": "JavaScript",
-        ".jsx": "JavaScript",
-        ".ts": "TypeScript",
-        ".tsx": "TypeScript",
-        ".py": "Python",
-        ".go": "Go",
-        ".java": "Java"
+        ".js": "JavaScript", ".jsx": "JavaScript", ".ts": "TypeScript", ".tsx": "TypeScript",
+        ".py": "Python", ".go": "Go", ".java": "Java", ".c": "C", ".h": "C", 
+        ".cpp": "C++", ".hpp": "C++", ".cc": "C++", ".cs": "C#"
     }
     
-    for root, _, files in os.walk(storage_path):
+    # Bulk insert files for speed
+    files_to_insert = []
+    
+    for root, dirs, files in os.walk(storage_path):
+        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
         for f in files:
+            if f.endswith(".min.js") or f.endswith(".min.css"):
+                continue
             file_path = os.path.join(root, f)
             rel_path = os.path.relpath(file_path, start=storage_path)
             
@@ -250,23 +373,25 @@ async def create_project(name: str = Form(...), file: UploadFile = FastAPIFile(.
             try:
                 with open(file_path, "r", encoding="utf-8") as source_file:
                     content = source_file.read()
+                    if "\x00" in content: # binary file check
+                        status = "unsupported"
+                        content = ""
                     line_count = len(content.splitlines())
             except UnicodeDecodeError:
-                # Binary or unsupported encoding
                 status = "unsupported"
                 content = ""
                 line_count = 0
                 
-            db_file = models.File(
+            files_to_insert.append(models.File(
                 project_id=project.id,
                 path=rel_path,
                 language=lang,
                 source_code=content,
                 line_count=line_count,
                 status=status
-            )
-            db.add(db_file)
-    
+            ))
+            
+    db.bulk_save_objects(files_to_insert)
     db.commit()
 
     return {"id": project.id, "name": project.name}
@@ -308,13 +433,7 @@ def get_project_files(project_id: int, current_user: models.User = Depends(get_c
         "files": result
     }
 
-@app.get("/api/v1/files/{file_id}/source", response_model=schemas.SourceResponse)
-def get_file_source(file_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
-    f = db.query(models.File).join(models.Project).filter(models.File.id == file_id, models.Project.owner_id == current_user.id).first()
-    if not f:
-        raise HTTPException(status_code=404)
-        
-    return {"source": f.source_code}
+
 
 
 @app.post("/api/v1/projects/{project_id}/analyze", response_model=schemas.AnalysisRunResponse)
@@ -331,8 +450,8 @@ def analyze_project(project_id: int, current_user: models.User = Depends(get_cur
     try:
         task_queue.enqueue(run_analysis, run.id)
     except Exception as e:
-        print(f"Warning: Redis not available ({e}), running analysis synchronously")
-        run_analysis(run.id)
+        logger.warning(f"Redis not available ({e}), running analysis in background thread")
+        Thread(target=run_analysis, args=(run.id,)).start()
         
     return {"run_id": run.id, "status": "queued"}
 
@@ -344,7 +463,24 @@ def analysis_status(run_id: int, current_user: models.User = Depends(get_current
     ).first()
     if not run:
         raise HTTPException(status_code=404)
-    return {"status": run.status}
+    
+    import json
+    skipped_reasons = {}
+    if run.skipped_reasons:
+        try:
+            skipped_reasons = json.loads(run.skipped_reasons)
+        except:
+            pass
+            
+    return {
+        "status": run.status,
+        "files_total": run.files_total,
+        "files_done": run.files_done,
+        "files_skipped": run.files_skipped,
+        "skipped_reasons": skipped_reasons,
+        "functions_found": run.functions_found,
+        "error_message": run.error_message
+    }
 
 @app.get("/api/v1/analysis/{run_id}/predictions", response_model=List[schemas.PredictionResponse])
 def analysis_predictions(run_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
@@ -387,13 +523,22 @@ def analysis_files(run_id: int, current_user: models.User = Depends(get_current_
                 "path": p.file.path,
                 "language": p.file.language,
                 "max_risk_score": 0.0,
+                "mean_risk_score": 0.0,
+                "risk_scores_sum": 0.0,
+                "function_count": 0,
+                "hotspot_count": 0,
                 "risk_counts": {"high": 0, "medium": 0, "low": 0}
             }
         f_data = files_map[p.file_id]
         if p.risk_score > f_data["max_risk_score"]:
             f_data["max_risk_score"] = p.risk_score
-        if p.risk_level in f_data["risk_counts"]:
-            f_data["risk_counts"][p.risk_level] += 1
+        f_data["risk_scores_sum"] += p.risk_score
+        f_data["function_count"] += 1
+        
+        if p.risk_level.lower() in f_data["risk_counts"]:
+            f_data["risk_counts"][p.risk_level.lower()] += 1
+        else:
+            f_data["risk_counts"][p.risk_level] = f_data["risk_counts"].get(p.risk_level, 0) + 1
             
     # Include files with hotspots but no predictions (e.g. only info/warning)
     hotspots = db.query(models.Hotspot).filter(models.Hotspot.run_id == run_id).all()
@@ -404,8 +549,17 @@ def analysis_files(run_id: int, current_user: models.User = Depends(get_current_
                 "path": h.file.path,
                 "language": h.file.language,
                 "max_risk_score": 0.0,
+                "mean_risk_score": 0.0,
+                "risk_scores_sum": 0.0,
+                "function_count": 0,
+                "hotspot_count": 0,
                 "risk_counts": {"high": 0, "medium": 0, "low": 0}
             }
+        files_map[h.file_id]["hotspot_count"] += 1
+            
+    for f_data in files_map.values():
+        if f_data["function_count"] > 0:
+            f_data["mean_risk_score"] = f_data["risk_scores_sum"] / f_data["function_count"]
             
     return list(files_map.values())
 
@@ -525,7 +679,7 @@ def prediction_report(id: int, current_user: models.User = Depends(get_current_u
     }
     
 @app.post("/api/v1/predictions/{id}/feedback", response_model=schemas.StatusResponse)
-def submit_feedback(id: int, is_real_bug: bool, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+def submit_feedback(id: int, feedback_in: schemas.FeedbackRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     pred = db.query(models.Prediction).join(models.File).join(models.Project).filter(
         models.Prediction.id == id,
         models.Project.owner_id == current_user.id
@@ -533,10 +687,45 @@ def submit_feedback(id: int, is_real_bug: bool, current_user: models.User = Depe
     if not pred:
         raise HTTPException(status_code=403, detail="Prediction not found or not owned by user")
         
-    feedback = models.Feedback(prediction_id=id, user_id=current_user.id, is_real_bug=is_real_bug)
-    db.add(feedback)
+    feedback = db.query(models.Feedback).filter(
+        models.Feedback.prediction_id == id,
+        models.Feedback.user_id == current_user.id
+    ).first()
+    
+    if feedback:
+        feedback.is_real_bug = feedback_in.is_real_bug
+        feedback.comment = feedback_in.comment
+    else:
+        feedback = models.Feedback(
+            prediction_id=id, 
+            user_id=current_user.id, 
+            is_real_bug=feedback_in.is_real_bug,
+            comment=feedback_in.comment
+        )
+        db.add(feedback)
+    
     db.commit()
     return {"status": "saved"}
+
+@app.get("/api/v1/predictions/{id}/feedback", response_model=schemas.FeedbackResponse)
+def get_feedback(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+    feedback = db.query(models.Feedback).filter(
+        models.Feedback.prediction_id == id,
+        models.Feedback.user_id == current_user.id
+    ).first()
+    
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+        
+    return {
+        "id": feedback.id,
+        "prediction_id": feedback.prediction_id,
+        "user_id": feedback.user_id,
+        "is_real_bug": feedback.is_real_bug,
+        "comment": feedback.comment,
+        "created_at": feedback.created_at.isoformat() + "Z" if feedback.created_at else "",
+        "updated_at": feedback.updated_at.isoformat() + "Z" if feedback.updated_at else ""
+    }
 
 @app.get("/api/v1/models/current", response_model=schemas.ModelCurrentResponse)
 def get_current_model(current_user: models.User = Depends(get_current_user)):

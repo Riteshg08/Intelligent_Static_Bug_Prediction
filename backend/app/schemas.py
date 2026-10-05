@@ -37,6 +37,12 @@ class AnalysisRunResponse(BaseModel):
 
 class StatusResponse(BaseModel):
     status: str
+    files_total: Optional[int] = 0
+    files_done: Optional[int] = 0
+    files_skipped: Optional[int] = 0
+    skipped_reasons: Optional[Dict[str, str]] = {}
+    functions_found: Optional[int] = 0
+    error_message: Optional[str] = None
 
 class PredictionResponse(BaseModel):
     id: int
@@ -54,7 +60,10 @@ class AnalysisFileResponse(BaseModel):
     path: str
     language: str
     max_risk_score: float
+    mean_risk_score: float
+    function_count: int
     risk_counts: RiskCounts
+    hotspot_count: int
 
 class FunctionAnnotation(BaseModel):
     id: int
@@ -96,3 +105,16 @@ class LanguagesResponse(BaseModel):
 class ProjectCreateResponse(BaseModel):
     id: int
     name: str
+
+class FeedbackRequest(BaseModel):
+    is_real_bug: bool
+    comment: Optional[str] = None
+
+class FeedbackResponse(BaseModel):
+    id: int
+    prediction_id: int
+    user_id: int
+    is_real_bug: bool
+    comment: Optional[str] = None
+    created_at: str
+    updated_at: str
