@@ -110,6 +110,8 @@ class PredictionEngine:
             results.append({
                 "function_name": func.get("function_name"),
                 "file_path": func.get("file_path"),
+                "start_line": func.get("start_line"),
+                "end_line": func.get("end_line"),
                 "language": lang,
                 "risk_score": float(prob),
                 "risk_level": risk_level,

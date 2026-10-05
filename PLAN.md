@@ -1,13 +1,13 @@
 # Project Plan
 
 - [x] Phase 1: Setup
-- [ ] Phase 2: Language Plugin Framework
-- [ ] Phase 3: Static Analysis
-- [ ] Phase 4: Dataset
-- [ ] Phase 5: ML
-- [ ] Phase 6: Prediction Engine
-- [ ] Phase 7: Backend
-- [ ] Phase 8: Frontend
-- [ ] Phase 9: Integration
-- [ ] Phase 10: Testing
-- [ ] Phase 11: Deployment/Docs
+- [x] Phase 2: Language Plugin Framework
+- [x] Phase 3: Static Analysis
+- [x] Phase 4: Dataset
+- [x] Phase 5: ML
+- [x] Phase 6: Prediction Engine
+- [x] Phase 7: Backend
+- [x] Phase 8: Frontend
+- [x] Phase 9: Integration
+- [x] Phase 10: Testing
+- [x] Phase 11: Deployment/Docs

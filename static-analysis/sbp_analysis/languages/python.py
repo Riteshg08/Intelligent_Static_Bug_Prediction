@@ -95,6 +95,43 @@ class PythonPlugin(LanguagePlugin):
                 if length > 21.45:
                     hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "warning", "rule_id": "long-function", "message": "Function is unusually long (>95th percentile)"})
 
+            # Check for eval()
+            if node.type == "call":
+                func_node = node.named_children[0] if node.named_children else None
+                if func_node and func_node.type == "identifier":
+                    func_name = source_code[func_node.start_byte:func_node.end_byte].decode('utf-8')
+                    if func_name == "eval":
+                        hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "insecure-eval", "message": "Insecure use of eval() function"})
+                    elif func_name in ("exec", "system", "popen"):
+                        hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "command-injection", "message": "Possible command execution vulnerability"})
+
+            # Check for SQL injection patterns (e.g. execute(f"..."))
+            if node.type == "call":
+                func_node = node.named_children[0] if node.named_children else None
+                if func_node and func_node.type == "attribute":
+                    attr_name_node = func_node.named_children[-1] if func_node.named_children else None
+                    if attr_name_node and attr_name_node.type == "identifier":
+                        attr_name = source_code[attr_name_node.start_byte:attr_name_node.end_byte].decode('utf-8')
+                        if attr_name == "execute":
+                            # Check arguments
+                            args_node = node.named_children[1] if len(node.named_children) > 1 else None
+                            if args_node and args_node.type == "argument_list":
+                                if len(args_node.named_children) > 0:
+                                    first_arg = args_node.named_children[0]
+                                    if first_arg.type in ("string", "binary_operator"): # f-strings are string, binary_operator could be "..." % ...
+                                        hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "sql-injection", "message": "Possible SQL injection: Unsanitized query string"})
+                                    elif first_arg.type == "identifier":
+                                        hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "sql-injection", "message": "Possible SQL injection: Variable used as query string"})
+
+            # Check for hardcoded secrets
+            if node.type == "assignment":
+                left = node.named_children[0] if node.named_children else None
+                right = node.named_children[-1] if node.named_children else None
+                if left and right and left.type == "identifier" and right.type == "string":
+                    var_name = source_code[left.start_byte:left.end_byte].decode('utf-8').lower()
+                    if any(x in var_name for x in ["password", "secret", "key", "token"]):
+                        hotspots.append({"start_line": node.start_point[0] + 1, "end_line": node.end_point[0] + 1, "severity": "high", "rule_id": "hardcoded-secret", "message": "Hardcoded secret detected"})
+
             for child in node.children:
                 walk(child, new_depth)
 

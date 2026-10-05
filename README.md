@@ -1,4 +1,4 @@
-# Intelligent Static Bug Prediction
+# Intelligent Static Bug Prediction (BugSight)
 
 A language-agnostic AI system that predicts logical bugs, code smells, and security vulnerabilities directly from source code without executing it.
 
@@ -20,48 +20,41 @@ graph TD
 - **Machine Learning**: LightGBM model trained on historical bug fixes (SZZ algorithm).
 - **Web Dashboard**: Upload your codebase, get predictions, view detailed feedback.
 
-## Setup & Run
+## Quickstart
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- PostgreSQL
-- Redis
+### 1. Local Run
+Requires Python 3.10+, Node.js 18+, Redis, and PostgreSQL/SQLite.
 
-### Backend
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-cd backend
-alembic upgrade head
-uvicorn app.main:app --reload
-```
+1. Create a `.env` file from `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Start the Backend and Worker (in separate terminals):
+   ```bash
+   # Terminal 1: Backend
+   cd backend
+   pip install -r requirements.txt
+   uvicorn app.main:app --reload
+   
+   # Terminal 2: Worker
+   cd backend
+   rq worker analysis
+   ```
+3. Start the Frontend:
+   ```bash
+   # Terminal 3: Frontend
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
-### Worker
-```bash
-cd backend
-rq worker analysis
-```
-
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Evaluation
-```bash
-cd ml
-python evaluate_final.py
-```
-
-## End-to-End Tests
-```bash
-cd integration
-python run_e2e.py
-```
+### 2. Docker Compose
+1. Ensure Docker and Docker Compose are installed.
+2. Run the application:
+   ```bash
+   docker-compose up --build
+   ```
+The frontend will be available at `http://localhost:5173` and the backend at `http://localhost:8000`.
 
 ## Production Readiness
 Status: **Ready for production**

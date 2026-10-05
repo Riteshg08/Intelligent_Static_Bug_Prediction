@@ -132,7 +132,7 @@ def get_projects(current_user: models.User = Depends(get_current_user), db: Sess
         func_count = 0
         last_updated = latest_run.created_at.isoformat() + "Z" if latest_run else None
         
-        if latest_run and latest_run.status == "analyzed":
+        if latest_run and latest_run.status in ["analyzed", "completed"]:
             preds = db.query(models.Prediction).filter(models.Prediction.run_id == latest_run.id).all()
             func_count = len(preds)
             for p in preds:

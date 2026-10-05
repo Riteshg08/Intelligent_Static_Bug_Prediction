@@ -56,9 +56,10 @@ def analyze_directory(directory: str) -> Tuple[pd.DataFrame, list]:
                 parsed += 1
                 for func in funcs:
                     feats = extract_features(func, content_bytes, import_count)
-                    # Add identifiers
                     feats['file_path'] = file_path
                     feats['function_name'] = func.function_name
+                    feats['start_line'] = func.start_line
+                    feats['end_line'] = func.end_line
                     results.append(feats)
             except Exception as e:
                 print(f"Skipped {file_path}: {e}")

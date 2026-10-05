@@ -17,8 +17,9 @@ import re
 redis_conn = Redis(host=os.getenv("REDIS_HOST", "localhost"), port=6379)
 task_queue = Queue("analysis", connection=redis_conn)
 
-engine = PredictionEngine(models_dir="../models")
-
+default_models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models"))
+models_dir = os.getenv("MODELS_DIR", default_models_dir)
+engine = PredictionEngine(models_dir=models_dir)
 def detect_secrets(file_path):
     secrets_found = False
     with open(file_path, 'r', errors='ignore') as f:
@@ -63,30 +64,55 @@ def run_analysis(run_id: int):
                 db_f.status = "analyzed"
             db.add(db_f)
             file_path_to_id[f_path] = db_f.id
+            print(f"DEBUG: Mapping {f_path} to db_file_id {db_f.id}")
         db.commit()
 
+        print(f"DEBUG: Found {len(features)} features")
         # predict
         for feat in features:
             file_path = os.path.abspath(feat['file_path'])
             lang = feat['language']
+            print(f"DEBUG: Checking {file_path}")
             
             db_file_id = file_path_to_id.get(file_path)
             if not db_file_id:
+                print(f"DEBUG: {file_path} not in file_path_to_id!")
                 continue
                 
             # predict
             pred_results = engine.predict([feat])
+            print(f"DEBUG: predict results: {pred_results}")
             if pred_results:
                 p = pred_results[0]
                 
                 # Check for secrets
-                if detect_secrets(file_path):
-                    p['confidence_note'] = (p.get('confidence_note', '') + " | SECRET DETECTED").strip()
+                secret_detected = detect_secrets(file_path)
+                
+                # Check for high severity hotspots in this function
+                # We need to filter all_hotspots by file and line range
+                func_start = p.get('start_line', 0)
+                func_end = p.get('end_line', 99999)
+                
+                func_hotspots = [
+                    h for h in all_hotspots 
+                    if h.get('file_path') == feat['file_path'] 
+                    and h.get('severity') == 'high'
+                    and h.get('start_line', 0) >= func_start
+                    and h.get('end_line', 99999) <= func_end
+                ]
+                
+                if secret_detected or func_hotspots:
+                    p['risk_score'] = max(p['risk_score'], 0.95)
+                    p['risk_level'] = "High"
+                    p['confidence_note'] = (p.get('confidence_note', '') + " | CRITICAL STATIC FINDING").strip()
+                    p['explanation'].insert(0, "Static analysis detected a high-risk pattern in this function.")
                     
                 prediction = models.Prediction(
                     file_id=db_file_id,
                     run_id=run.id,
                     function_name=p['function_name'],
+                    start_line=p.get('start_line'),
+                    end_line=p.get('end_line'),
                     language=p['language'],
                     risk_score=p['risk_score'],
                     risk_level=p['risk_level'],

@@ -53,14 +53,16 @@ export default function Dashboard() {
       
       const projectId = res.data.id;
       
-      // Start analysis right away
-      await api.post(`/projects/${projectId}/analyze`);
-      
       setName('');
       setFile(null);
       setShowUpload(false);
       
       navigate(`/projects/${projectId}`);
+      
+      // Start analysis right away (don't await so we navigate first)
+      api.post(`/projects/${projectId}/analyze`).catch(err => {
+        console.error("Failed to start analysis:", err);
+      });
     } catch (err) {
       console.error(err);
       alert("Failed to upload project");
