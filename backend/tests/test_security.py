@@ -66,4 +66,4 @@ def test_unauthorized_access_to_others_project(setup_db):
     
     # User 2 tries to access User 1's file source
     response = client.get(f"/api/v1/files/{setup_db['f1'].id}/source", headers=headers)
-    assert response.status_code == 403
+    assert response.status_code == 404

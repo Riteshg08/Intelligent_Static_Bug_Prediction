@@ -81,6 +81,8 @@ class Prediction(Base):
     model_version_id = Column(Integer, ForeignKey("model_versions.id"))
     
     function_name = Column(String)
+    start_line = Column(Integer, nullable=True)
+    end_line = Column(Integer, nullable=True)
     language = Column(String, index=True)
     risk_score = Column(Float)
     risk_level = Column(String)

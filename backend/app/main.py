@@ -15,13 +15,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from .worker import task_queue, run_analysis
 
-from . import models, database
+from typing import List
+from . import models, database, schemas
 
 app = FastAPI(title="Intelligent Static Bug Prediction API")
 
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+origins = [url.strip() for url in frontend_url.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,7 +115,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return {"username": current_user.username, "id": current_user.id}
 
-@app.get("/api/v1/projects")
+@app.get("/api/v1/projects", response_model=List[schemas.ProjectResponse])
 def get_projects(current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     projects = db.query(models.Project).filter(models.Project.owner_id == current_user.id).all()
     result = []
@@ -191,7 +195,7 @@ def delete_project(project_id: int, current_user: models.User = Depends(get_curr
         
     return {"status": "success"}
 
-@app.post("/api/v1/projects")
+@app.post("/api/v1/projects", response_model=schemas.ProjectCreateResponse)
 async def create_project(name: str = Form(...), file: UploadFile = FastAPIFile(...), current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     project = models.Project(name=name, owner_id=current_user.id)
     db.add(project)
@@ -267,7 +271,7 @@ async def create_project(name: str = Form(...), file: UploadFile = FastAPIFile(.
 
     return {"id": project.id, "name": project.name}
 
-@app.get("/api/v1/projects/{project_id}/files")
+@app.get("/api/v1/projects/{project_id}/files", response_model=schemas.ProjectFilesResponse)
 def get_project_files(project_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     project = db.query(models.Project).filter(models.Project.id == project_id, models.Project.owner_id == current_user.id).first()
     if not project:
@@ -304,7 +308,7 @@ def get_project_files(project_id: int, current_user: models.User = Depends(get_c
         "files": result
     }
 
-@app.get("/api/v1/files/{file_id}/source")
+@app.get("/api/v1/files/{file_id}/source", response_model=schemas.SourceResponse)
 def get_file_source(file_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     f = db.query(models.File).join(models.Project).filter(models.File.id == file_id, models.Project.owner_id == current_user.id).first()
     if not f:
@@ -312,16 +316,8 @@ def get_file_source(file_id: int, current_user: models.User = Depends(get_curren
         
     return {"source": f.source_code}
 
-@app.delete("/api/v1/projects/{project_id}")
-def delete_project(project_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
-    project = db.query(models.Project).filter(models.Project.id == project_id, models.Project.owner_id == current_user.id).first()
-    if not project:
-        raise HTTPException(status_code=404)
-    db.delete(project)
-    db.commit()
-    return {"status": "deleted"}
 
-@app.post("/api/v1/projects/{project_id}/analyze")
+@app.post("/api/v1/projects/{project_id}/analyze", response_model=schemas.AnalysisRunResponse)
 def analyze_project(project_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     project = db.query(models.Project).filter(models.Project.id == project_id, models.Project.owner_id == current_user.id).first()
     if not project:
@@ -340,7 +336,7 @@ def analyze_project(project_id: int, current_user: models.User = Depends(get_cur
         
     return {"run_id": run.id, "status": "queued"}
 
-@app.get("/api/v1/analysis/{run_id}/status")
+@app.get("/api/v1/analysis/{run_id}/status", response_model=schemas.StatusResponse)
 def analysis_status(run_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     run = db.query(models.AnalysisRun).join(models.Project).filter(
         models.AnalysisRun.id == run_id, 
@@ -350,7 +346,7 @@ def analysis_status(run_id: int, current_user: models.User = Depends(get_current
         raise HTTPException(status_code=404)
     return {"status": run.status}
 
-@app.get("/api/v1/analysis/{run_id}/predictions")
+@app.get("/api/v1/analysis/{run_id}/predictions", response_model=List[schemas.PredictionResponse])
 def analysis_predictions(run_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     run = db.query(models.AnalysisRun).join(models.Project).filter(
         models.AnalysisRun.id == run_id, 
@@ -372,7 +368,7 @@ def analysis_predictions(run_id: int, current_user: models.User = Depends(get_cu
         "file_path": p.file.path if p.file else ""
     } for p in preds]
     
-@app.get("/api/v1/analysis/{run_id}/files")
+@app.get("/api/v1/analysis/{run_id}/files", response_model=List[schemas.AnalysisFileResponse])
 def analysis_files(run_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     run = db.query(models.AnalysisRun).join(models.Project).filter(
         models.AnalysisRun.id == run_id, 
@@ -432,7 +428,7 @@ def file_source(file_id: int, current_user: models.User = Depends(get_current_us
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/v1/files/{file_id}/annotations")
+@app.get("/api/v1/files/{file_id}/annotations", response_model=schemas.AnnotationsResponse)
 def file_annotations(file_id: int, run_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     db_file = db.query(models.File).join(models.Project).filter(
         models.File.id == file_id,
@@ -481,7 +477,7 @@ def file_annotations(file_id: int, run_id: int, current_user: models.User = Depe
     
     return {"functions": functions, "hotspots": hotspots_list}
 
-@app.get("/api/v1/predictions/{id}/report")
+@app.get("/api/v1/predictions/{id}/report", response_model=schemas.PredictionReportResponse)
 def prediction_report(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     pred = db.query(models.Prediction).join(models.File).join(models.Project).filter(
         models.Prediction.id == id,
@@ -528,14 +524,21 @@ def prediction_report(id: int, current_user: models.User = Depends(get_current_u
         "file_id": pred.file_id
     }
     
-@app.post("/api/v1/predictions/{id}/feedback")
+@app.post("/api/v1/predictions/{id}/feedback", response_model=schemas.StatusResponse)
 def submit_feedback(id: int, is_real_bug: bool, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+    pred = db.query(models.Prediction).join(models.File).join(models.Project).filter(
+        models.Prediction.id == id,
+        models.Project.owner_id == current_user.id
+    ).first()
+    if not pred:
+        raise HTTPException(status_code=403, detail="Prediction not found or not owned by user")
+        
     feedback = models.Feedback(prediction_id=id, user_id=current_user.id, is_real_bug=is_real_bug)
     db.add(feedback)
     db.commit()
     return {"status": "saved"}
 
-@app.get("/api/v1/models/current")
+@app.get("/api/v1/models/current", response_model=schemas.ModelCurrentResponse)
 def get_current_model(current_user: models.User = Depends(get_current_user)):
     active_path = "../models/active.txt"
     if os.path.exists(active_path):
@@ -544,6 +547,47 @@ def get_current_model(current_user: models.User = Depends(get_current_user)):
         return {"version": version}
     return {"version": "unknown"}
 
-@app.get("/api/v1/languages")
+@app.get("/api/v1/languages", response_model=schemas.LanguagesResponse)
 def get_languages():
     return {"languages": ["Python", "JavaScript", "TypeScript", "Java", "C", "C++", "C#", "Go"]}
+
+@app.get("/api/v1/analysis/{run_id}/export")
+def export_analysis_json(run_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+    run = db.query(models.AnalysisRun).join(models.Project).filter(
+        models.AnalysisRun.id == run_id, 
+        models.Project.owner_id == current_user.id
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404)
+        
+    preds = db.query(models.Prediction).filter(models.Prediction.run_id == run_id).all()
+    results = []
+    for p in preds:
+        results.append({
+            "function": p.function_name,
+            "language": p.language,
+            "risk_score": p.risk_score,
+            "risk_level": p.risk_level,
+            "file": p.file.path if p.file else ""
+        })
+    return {"project_id": run.project_id, "run_id": run_id, "findings": results}
+
+@app.get("/api/v1/analysis/{run_id}/status/languages")
+def analysis_status_by_language(run_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+    run = db.query(models.AnalysisRun).join(models.Project).filter(
+        models.AnalysisRun.id == run_id, 
+        models.Project.owner_id == current_user.id
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404)
+        
+    files = db.query(models.File).filter(models.File.project_id == run.project_id).all()
+    lang_status = {}
+    for f in files:
+        if f.language not in lang_status:
+            lang_status[f.language] = {"total": 0, "analyzed": 0, "pending": 0, "failed": 0, "skipped": 0}
+        lang_status[f.language]["total"] += 1
+        st = f.status if f.status in ["analyzed", "pending", "failed", "skipped"] else "pending"
+        lang_status[f.language][st] += 1
+        
+    return lang_status
