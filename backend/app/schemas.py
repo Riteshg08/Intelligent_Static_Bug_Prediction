@@ -54,6 +54,7 @@ class PredictionResponse(BaseModel):
     risk_level: str
     file_id: int
     file_path: str
+    pattern_severity: str = "none"
 
 class AnalysisFileResponse(BaseModel):
     id: int
@@ -95,9 +96,13 @@ class PredictionReportResponse(BaseModel):
     explanation: Any
     hotspots: List[Hotspot]
     file_id: int
+    pattern_severity: str = "none"
 
 class ModelCurrentResponse(BaseModel):
     version: str
+    thresholds: Optional[Dict[str, float]] = None
+    languages: Optional[Dict[str, Any]] = None
+    dataset_summary: Optional[Dict[str, Any]] = None
 
 class LanguagesResponse(BaseModel):
     languages: List[str]

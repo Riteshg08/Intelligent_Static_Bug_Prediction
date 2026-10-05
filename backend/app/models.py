@@ -95,6 +95,7 @@ class Prediction(Base):
     risk_level = Column(String)
     confidence_note = Column(String)
     explanation_json = Column(String)
+    pattern_severity = Column(String, default="none")
     
     file = relationship("File", back_populates="predictions")
     run = relationship("AnalysisRun", back_populates="predictions")

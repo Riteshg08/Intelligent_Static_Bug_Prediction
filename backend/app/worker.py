@@ -73,11 +73,14 @@ def run_analysis(run_id: int):
         run.skipped_reasons = json.dumps({p[0]: p[1] for p in skipped_files_list})
         db.commit()
 
-        print(f"DEBUG: Found {len(features)} features")
-        # predict
+        from collections import defaultdict
+        features_by_file = defaultdict(list)
         for feat in features:
-            file_path = os.path.abspath(feat['file_path'])
-            lang = feat['language']
+            features_by_file[os.path.abspath(feat['file_path'])].append(feat)
+            
+        print(f"DEBUG: Found {len(features)} features across {len(features_by_file)} files")
+        # predict
+        for file_path, file_features in features_by_file.items():
             print(f"DEBUG: Checking {file_path}")
             
             db_file_id = file_path_to_id.get(file_path)
@@ -85,33 +88,37 @@ def run_analysis(run_id: int):
                 print(f"DEBUG: {file_path} not in file_path_to_id!")
                 continue
                 
-            # predict
-            pred_results = engine.predict([feat])
-            print(f"DEBUG: predict results: {pred_results}")
-            if pred_results:
-                p = pred_results[0]
-                
-                # Check for secrets
-                secret_detected = detect_secrets(file_path)
-                
-                # Check for high severity hotspots in this function
-                # We need to filter all_hotspots by file and line range
+            # predict in batch for the file
+            pred_results = engine.predict(file_features)
+            
+            # Check for secrets once for the file
+            secret_detected = detect_secrets(file_path)
+            
+            for feat, p in zip(file_features, pred_results):
+                if "error" in p:
+                    print(f"DEBUG: Predict error: {p['error']}")
+                    continue
+                    
+                # Calculate pattern severity
                 func_start = p.get('start_line', 0)
                 func_end = p.get('end_line', 99999)
                 
                 func_hotspots = [
                     h for h in all_hotspots 
-                    if h.get('file_path') == feat['file_path'] 
-                    and h.get('severity') == 'high'
+                    if os.path.abspath(h.get('file_path', '')) == file_path 
                     and h.get('start_line', 0) >= func_start
                     and h.get('end_line', 99999) <= func_end
                 ]
                 
-                if secret_detected or func_hotspots:
-                    p['risk_score'] = max(p['risk_score'], 0.95)
-                    p['risk_level'] = "High"
-                    p['confidence_note'] = (p.get('confidence_note', '') + " | CRITICAL STATIC FINDING").strip()
-                    p['explanation'].insert(0, "Static analysis detected a high-risk pattern in this function.")
+                pattern_severity = "none"
+                if secret_detected:
+                    pattern_severity = "high"
+                elif any(h.get('severity') == 'high' for h in func_hotspots):
+                    pattern_severity = "high"
+                elif any(h.get('severity') == 'warning' for h in func_hotspots):
+                    pattern_severity = "warning"
+                elif func_hotspots:
+                    pattern_severity = "info"
                     
                 prediction = models.Prediction(
                     file_id=db_file_id,
@@ -123,13 +130,13 @@ def run_analysis(run_id: int):
                     risk_score=p['risk_score'],
                     risk_level=p['risk_level'],
                     confidence_note=p['confidence_note'],
-                    explanation_json=json.dumps(p['explanation'])
+                    explanation_json=json.dumps(p['explanation']),
+                    pattern_severity=pattern_severity
                 )
                 db.add(prediction)
                 run.functions_found += 1
             
-            # Incremental updates per feature loop is too granular, let's update per file if needed
-            # Actually, `features` is a list of functions, we can just commit periodically or at the end
+            # Commit per file
             db.commit()
 
         # Save hotspots

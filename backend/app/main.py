@@ -501,7 +501,8 @@ def analysis_predictions(run_id: int, current_user: models.User = Depends(get_cu
         "risk_score": p.risk_score,
         "risk_level": p.risk_level,
         "file_id": p.file_id,
-        "file_path": p.file.path if p.file else ""
+        "file_path": p.file.path if p.file else "",
+        "pattern_severity": p.pattern_severity or "none"
     } for p in preds]
     
 @app.get("/api/v1/analysis/{run_id}/files", response_model=List[schemas.AnalysisFileResponse])
@@ -532,8 +533,17 @@ def analysis_files(run_id: int, current_user: models.User = Depends(get_current_
         f_data = files_map[p.file_id]
         if p.risk_score > f_data["max_risk_score"]:
             f_data["max_risk_score"] = p.risk_score
-        f_data["risk_scores_sum"] += p.risk_score
+            
+        if "function_lines_sum" not in f_data:
+            f_data["function_lines_sum"] = 0
+            
+        length = 1
+        if p.end_line and p.start_line:
+            length = max(1, p.end_line - p.start_line + 1)
+            
+        f_data["risk_scores_sum"] += p.risk_score * length
         f_data["function_count"] += 1
+        f_data["function_lines_sum"] += length
         
         if p.risk_level.lower() in f_data["risk_counts"]:
             f_data["risk_counts"][p.risk_level.lower()] += 1
@@ -553,13 +563,14 @@ def analysis_files(run_id: int, current_user: models.User = Depends(get_current_
                 "risk_scores_sum": 0.0,
                 "function_count": 0,
                 "hotspot_count": 0,
-                "risk_counts": {"high": 0, "medium": 0, "low": 0}
+                "risk_counts": {"high": 0, "medium": 0, "low": 0},
+                "function_lines_sum": 0
             }
         files_map[h.file_id]["hotspot_count"] += 1
             
     for f_data in files_map.values():
-        if f_data["function_count"] > 0:
-            f_data["mean_risk_score"] = f_data["risk_scores_sum"] / f_data["function_count"]
+        if f_data.get("function_lines_sum", 0) > 0:
+            f_data["mean_risk_score"] = f_data["risk_scores_sum"] / f_data["function_lines_sum"]
             
     return list(files_map.values())
 
@@ -675,7 +686,8 @@ def prediction_report(id: int, current_user: models.User = Depends(get_current_u
         "confidence_note": pred.confidence_note,
         "explanation": json.loads(pred.explanation_json) if pred.explanation_json else {},
         "hotspots": hotspots_list,
-        "file_id": pred.file_id
+        "file_id": pred.file_id,
+        "pattern_severity": pred.pattern_severity or "none"
     }
     
 @app.post("/api/v1/predictions/{id}/feedback", response_model=schemas.StatusResponse)
@@ -733,6 +745,17 @@ def get_current_model(current_user: models.User = Depends(get_current_user)):
     if os.path.exists(active_path):
         with open(active_path, "r") as f:
             version = f.read().strip()
+            
+        metadata_path = f"../models/{version}/metadata.json"
+        if os.path.exists(metadata_path):
+            with open(metadata_path, "r") as mf:
+                metadata = json.load(mf)
+            return {
+                "version": version,
+                "thresholds": metadata.get("thresholds"),
+                "languages": metadata.get("languages"),
+                "dataset_summary": metadata.get("dataset_summary")
+            }
         return {"version": version}
     return {"version": "unknown"}
 

@@ -21,3 +21,8 @@
 - Added endpoints GET /api/v1/analysis/{run_id}/export and GET /api/v1/analysis/{run_id}/status/languages to meet frontend CORE requirements.
 - Ensured ownership checks on POST /api/v1/predictions/{id}/feedback to maintain security.
 - Added Pydantic schemas in schemas.py and response models to all endpoints to support generating a precise openapi.json.
+
+## Scoring and Patterns
+- Replaced the logic that hardcoded risk score to 0.95 (High) when high-severity static hotspots/secrets are detected. Now ML probability score is preserved strictly for statistical properties, while `pattern_severity` (none/info/warning/high) represents absolute rules.
+- Review Priority Sort Algorithm: Priority sorting should rely first on pattern severity (e.g. High patterns appear first) then break ties using the absolute risk score. This ensures secrets are immediately visible but ML predictions remain accurate.
+- File-level aggregation exposed via API calculates max risk score across functions and a **size-weighted mean risk** (weighted by function line counts) to give a better view of overall code quality without skewing from tiny functions.
