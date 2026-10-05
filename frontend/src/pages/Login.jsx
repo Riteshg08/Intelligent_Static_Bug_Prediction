@@ -16,8 +16,9 @@ export default function Login() {
       const res = await api.post('/auth/login', formData);
       localStorage.setItem('token', res.data.access_token);
       navigate('/');
-    } catch {
-      alert('Login failed');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Login failed';
+      alert(msg);
     }
   };
 
@@ -27,8 +28,9 @@ export default function Login() {
       const res = await api.post('/auth/register', { username, password });
       localStorage.setItem('token', res.data.access_token);
       navigate('/');
-    } catch {
-      alert('Registration failed');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Registration failed';
+      alert(msg);
     }
   };
 

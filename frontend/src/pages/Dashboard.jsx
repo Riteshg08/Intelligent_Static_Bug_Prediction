@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../lib/api';
 import { useNavigate } from 'react-router-dom';
-import { Info, Folder, AlertCircle, AlertTriangle, CheckCircle2, MoreHorizontal, Clock, Plus } from 'lucide-react';
+import { Info, Folder, AlertTriangle, CheckCircle2, MoreHorizontal, Clock, Plus } from 'lucide-react';
 
 export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState(null);
   const [name, setName] = useState('');
-  const navigate = useNavigate();
+  const [openMenuId, setOpenMenuId] = useState(null);
 
-  const token = localStorage.getItem('token');
+  const navigate = useNavigate();
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -24,6 +24,12 @@ export default function Dashboard() {
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
+
+  useEffect(() => {
+    const handleWindowClick = () => setOpenMenuId(null);
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -56,6 +62,18 @@ export default function Dashboard() {
 
   const viewProject = (projectId) => {
     navigate(`/projects/${projectId}`);
+  };
+
+  const handleDeleteProject = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this project?')) return;
+    try {
+      await api.delete(`/projects/${id}`);
+      setProjects(projects.filter(p => p.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete project");
+    }
+    setOpenMenuId(null);
   };
 
   const totalHigh = projects.reduce((acc, p) => acc + (p.risk_counts?.high || 0), 0);
@@ -174,14 +192,35 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-3 gap-6">
         {projects.map(project => (
-          <div key={project.id} onClick={() => viewProject(project.id)} className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md cursor-pointer transition-shadow flex flex-col h-48">
+          <div key={project.id} onClick={() => viewProject(project.id)} className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md cursor-pointer transition-shadow flex flex-col h-48 relative">
             <div className="flex justify-between items-start mb-3">
               <div className="w-8 h-8 rounded bg-indigo-50 flex items-center justify-center">
                 <Folder className="w-4 h-4 text-indigo-500" />
               </div>
-              <button className="text-gray-400 hover:text-gray-600">
-                <MoreHorizontal className="w-5 h-5" />
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === project.id ? null : project.id); }}
+                  className="text-gray-400 hover:text-gray-600 focus:outline-none"
+                >
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
+                {openMenuId === project.id && (
+                  <div className="absolute right-0 mt-2 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-10 overflow-hidden">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); viewProject(project.id); }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-medium"
+                    >
+                      Open
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium border-t border-gray-100"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="flex items-center mb-2">

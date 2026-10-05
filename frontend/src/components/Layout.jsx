@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Bug, LayoutDashboard, FolderOpen, Code2, Table2, Gauge, TrendingUp, Bell, Plus, Moon, LogOut, Search, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Bug, LayoutDashboard, FolderOpen, Code2, Table2, Bell, Plus, Moon, LogOut, ChevronDown } from 'lucide-react';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -43,6 +43,7 @@ export default function Layout() {
               <Code2 className="w-4 h-4 inline mr-2 mb-0.5" />
               Code review
             </button>
+            <button className={`px-3 py-1.5 rounded-md ${currentSection === 'Results' ? 'text-gray-900 bg-gray-100' : 'text-gray-600 hover:bg-gray-50'}`}>
               <Table2 className="w-4 h-4 inline mr-2 mb-0.5" />
               Results
             </button>

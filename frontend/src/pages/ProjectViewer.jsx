@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
-import { AlertTriangle, AlertCircle, Info, ChevronRight, ChevronLeft, FileCode, CheckCircle2, FileWarning, Search, Folder, ChevronUp, ChevronDown, AlignLeft } from 'lucide-react';
+import { AlertTriangle, Info, FileCode, CheckCircle2, Folder, ChevronUp, ChevronDown, AlignLeft } from 'lucide-react';
 
 const ITEM_HEIGHT = 22; // px per line
 const BUFFER = 20;
@@ -21,7 +21,6 @@ export default function ProjectViewer() {
   const [loading, setLoading] = useState(true);
   const [fileError, setFileError] = useState(null);
 
-  const [showHotspots, setShowHotspots] = useState(true);
   const [severityFilter, setSeverityFilter] = useState('all');
   
   const scrollContainerRef = useRef(null);
@@ -88,13 +87,12 @@ export default function ProjectViewer() {
 
   const filteredHotspots = useMemo(() => {
     let hs = annotations.hotspots || [];
-    if (!showHotspots) hs = [];
-    else if (severityFilter !== 'all') {
+    if (severityFilter !== 'all') {
       hs = hs.filter(h => h.severity === severityFilter);
     }
     hs.sort((a, b) => a.start_line - b.start_line);
     return hs;
-  }, [annotations.hotspots, showHotspots, severityFilter]);
+  }, [annotations.hotspots, severityFilter]);
 
   const containerHeight = 600;
   const visibleItemCount = Math.ceil(containerHeight / ITEM_HEIGHT) + 2 * BUFFER;

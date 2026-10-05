@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../lib/api';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, CheckCircle2, Download, Search, Info, Activity } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Search, Info, Activity } from 'lucide-react';
 
 export default function AnalysisView() {
   const { runId } = useParams();
@@ -9,8 +9,6 @@ export default function AnalysisView() {
   const [status, setStatus] = useState('queued');
   const [predictions, setPredictions] = useState([]);
   const [search, setSearch] = useState('');
-  
-  const token = localStorage.getItem('token');
 
   const checkStatus = useCallback(async () => {
     try {

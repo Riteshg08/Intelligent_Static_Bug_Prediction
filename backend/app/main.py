@@ -147,6 +147,50 @@ def get_projects(current_user: models.User = Depends(get_current_user), db: Sess
         })
     return result
 
+@app.delete("/api/v1/projects/{project_id}")
+def delete_project(project_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id, models.Project.owner_id == current_user.id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # cascade delete manually
+    runs = db.query(models.AnalysisRun).filter(models.AnalysisRun.project_id == project_id).all()
+    run_ids = [run.id for run in runs]
+    
+    files = db.query(models.File).filter(models.File.project_id == project_id).all()
+    file_ids = [f.id for f in files]
+    
+    if run_ids:
+        db.query(models.Hotspot).filter(models.Hotspot.run_id.in_(run_ids)).delete(synchronize_session=False)
+        preds = db.query(models.Prediction).filter(models.Prediction.run_id.in_(run_ids)).all()
+        pred_ids = [p.id for p in preds]
+        if pred_ids:
+            db.query(models.Feedback).filter(models.Feedback.prediction_id.in_(pred_ids)).delete(synchronize_session=False)
+        db.query(models.Prediction).filter(models.Prediction.run_id.in_(run_ids)).delete(synchronize_session=False)
+        db.query(models.AnalysisRun).filter(models.AnalysisRun.id.in_(run_ids)).delete(synchronize_session=False)
+        
+    if file_ids:
+        db.query(models.ExtractedFeature).filter(models.ExtractedFeature.file_id.in_(file_ids)).delete(synchronize_session=False)
+        preds = db.query(models.Prediction).filter(models.Prediction.file_id.in_(file_ids)).all()
+        pred_ids = [p.id for p in preds]
+        if pred_ids:
+            db.query(models.Feedback).filter(models.Feedback.prediction_id.in_(pred_ids)).delete(synchronize_session=False)
+            db.query(models.Prediction).filter(models.Prediction.file_id.in_(file_ids)).delete(synchronize_session=False)
+        db.query(models.File).filter(models.File.id.in_(file_ids)).delete(synchronize_session=False)
+        
+    db.query(models.BugReport).filter(models.BugReport.project_id == project_id).delete(synchronize_session=False)
+    db.delete(project)
+    db.commit()
+    
+    # Delete from storage
+    storage_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../storage"))
+    storage_path = os.path.join(storage_base, f"projects/{project_id}")
+    if os.path.exists(storage_path):
+        import shutil
+        shutil.rmtree(storage_path)
+        
+    return {"status": "success"}
+
 @app.post("/api/v1/projects")
 async def create_project(name: str = Form(...), file: UploadFile = FastAPIFile(...), current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     project = models.Project(name=name, owner_id=current_user.id)

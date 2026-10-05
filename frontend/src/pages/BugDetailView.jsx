@@ -7,7 +7,7 @@ export default function BugDetailView() {
   const { id } = useParams();
   const [report, setReport] = useState(null);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
-  const token = localStorage.getItem('token');
+
 
   const fetchReport = useCallback(async () => {
     const res = await api.get(`/predictions/${id}/report`);

@@ -1,25 +1,27 @@
 # Frontend Audit
 
-## 1. Pages & Components Classification
+## Features & APIs
 
-| Feature / Screen | File | What it calls | Backend Endpoint Needed | Exists? | Works? | Classification |
-| --- | --- | --- | --- | --- | --- | --- |
-| Routing & Entry | `App.jsx`, `main.jsx` | None | None | N/A | Yes | **CORE** |
-| Navigation Layout | `Layout.jsx` | None (Local storage token check) | None | N/A | Yes | **CORE** |
-| Login / Register | `Login.jsx` | `POST /api/v1/auth/login`, `POST /api/v1/auth/register` | `/api/v1/auth/login`, `/api/v1/auth/register` | Yes | Yes | **CORE** |
-| Project Dashboard | `Dashboard.jsx` | `GET /api/v1/projects`, `POST /api/v1/projects` (upload), `POST /api/v1/projects/{projectId}/analyze` | `/api/v1/projects`, `/api/v1/projects/{projectId}/analyze` | Yes | Yes | **CORE** |
-| Risk Results Table | `AnalysisView.jsx` | `GET /api/v1/analysis/{runId}/status`, `GET /api/v1/analysis/{runId}/predictions` | `/api/v1/analysis/{runId}/status`, `/api/v1/analysis/{runId}/predictions` | Yes | Yes | **CORE** |
-| Project Code Viewer | `ProjectViewer.jsx` | `GET /api/v1/projects/{projectId}/files`, `GET /api/v1/files/{fileId}/source`, `GET /api/v1/files/{fileId}/annotations` | `/api/v1/projects/{projectId}/files`, `/api/v1/files/{fileId}/source`, `/api/v1/files/{fileId}/annotations` | Yes | Yes | **CORE** |
-| Explanation Page | `BugDetailView.jsx` | `GET /api/v1/predictions/{id}/report`, `POST /api/v1/predictions/{id}/feedback` | `/api/v1/predictions/{id}/report`, `/api/v1/predictions/{id}/feedback` | Yes | Yes | **CORE** |
-| Run File Viewer | `FileViewer.jsx` | `GET /api/v1/analysis/{runId}/files`, `GET /api/v1/files/{fileId}/source`, `GET /api/v1/files/{fileId}/annotations` | (Same as ProjectViewer mostly) | Yes | Yes | **UNNECESSARY** (Duplicate of ProjectViewer) |
+| feature/screen | API it calls | backend endpoint needed | exists in backend? | works? | Status |
+|---|---|---|---|---|---|
+| **Login / Register** (`Login.jsx`) | `POST /auth/login`<br>`POST /auth/register` | `POST /api/v1/auth/login`<br>`POST /api/v1/auth/register` | Yes | Yes | CORE |
+| **Dashboard (List projects & risk scores)** (`Dashboard.jsx`) | `GET /projects` | `GET /api/v1/projects` | Yes | Yes | CORE |
+| **Dashboard (Upload)** (`Dashboard.jsx`) | `POST /projects` | `POST /api/v1/projects` | Yes | Yes | CORE |
+| **Dashboard (Analysis progress trigger)** (`Dashboard.jsx`) | `POST /projects/{id}/analyze` | `POST /api/v1/projects/{id}/analyze` | Yes | Yes | CORE |
+| **Dashboard (Delete project)** (`Dashboard.jsx`) | `DELETE /projects/{id}` | `DELETE /api/v1/projects/{id}` | Yes | Yes | CORE |
+| **Project Viewer (Files list)** (`ProjectViewer.jsx`) | `GET /projects/{id}/files` | `GET /api/v1/projects/{id}/files` | Yes | Yes | CORE |
+| **Project Viewer (Source code viewer with line numbers)** (`ProjectViewer.jsx`) | `GET /files/{id}/source` | `GET /api/v1/files/{id}/source` | Yes | Yes | CORE |
+| **Project Viewer (Function range tinting, Risky-line highlighting, Findings panel)** (`ProjectViewer.jsx`) | `GET /files/{id}/annotations?run_id={id}` | `GET /api/v1/files/{id}/annotations` | Yes | Yes | CORE |
+| **Analysis View (Analysis progress status)** (`AnalysisView.jsx`) | `GET /analysis/{id}/status` | `GET /api/v1/analysis/{id}/status` | Yes | Yes | CORE |
+| **Analysis View (Ranked results table, Risk score, Low/Medium/High badges)** (`AnalysisView.jsx`) | `GET /analysis/{id}/predictions` | `GET /api/v1/analysis/{id}/predictions` | Yes | Yes | CORE |
+| **Bug Detail View (Explanation page)** (`BugDetailView.jsx`) | `GET /predictions/{id}/report` | `GET /api/v1/predictions/{id}/report` | Yes | Yes | CORE |
+| **Bug Detail View (Feedback buttons)** (`BugDetailView.jsx`) | `POST /predictions/{id}/feedback?is_real_bug={bool}` | `POST /api/v1/predictions/{id}/feedback` | Yes | Yes | CORE |
+| **File Viewer** (`FileViewer.jsx`) | None | None | N/A | N/A | UNNECESSARY |
+| **App CSS** (`App.css`) | None | None | N/A | N/A | UNNECESSARY |
+| **Template Assets** (`assets/hero.png`, `react.svg`, `vite.svg`) | None | None | N/A | N/A | UNNECESSARY |
+| **Mock Tests / Files** (`__tests__/AnalysisView.test.jsx`, `App.test.jsx`) | None | None | N/A | N/A | UNNECESSARY |
 
-## 2. Hard-Coded & Mock Data Identified
-- `Layout.jsx`: Contains hardcoded UI buttons for "Models", "Trends", "Demo workspace" with placeholder logic. Needs cleanup.
-- `Dashboard.jsx`: Hardcoded "Demo" badge if project name contains "test".
-- `BugDetailView.jsx`: Hardcoded `JSON.parse(report.explanation_json || "[]")` instead of properly typing.
-
-## 3. Plan for Phase 2 (Cleanup)
-- Remove `FileViewer.jsx` and route directly to `ProjectViewer.jsx` (which needs a route update to handle a selected file if needed).
-- Remove hard-coded mock/placeholder buttons in `Layout.jsx` ("Trends", "Models") unless they can be wired.
-- Create `src/lib/api.js` to centralize all Axios calls instead of having raw `axios.get/post` in every component.
-- Consolidate types (or JSDoc if pure JS).
+## Summary of Removals & Additions
+- All backend endpoints currently required by the frontend are present in the backend (`backend/app/main.py`) and appear functional. 
+- The features explicitly requested to be **CORE** are fully covered by `Dashboard`, `ProjectViewer`, `AnalysisView`, `BugDetailView`, and `Login` pages. JSON export is available in `AnalysisView.jsx`.
+- **UNNECESSARY** items to be removed: `FileViewer.jsx` (deprecated), `App.css` (unused styles), template assets (`hero.png`, `react.svg`, `vite.svg`), and unused mock/test files.
