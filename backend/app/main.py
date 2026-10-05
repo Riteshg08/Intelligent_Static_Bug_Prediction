@@ -62,7 +62,7 @@ if not SECRET_KEY:
         raise ValueError("SECRET_KEY must be set outside development environment.")
     SECRET_KEY = "supersecretkey"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 480
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 480))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
@@ -745,26 +745,6 @@ def get_feedback(id: int, current_user: models.User = Depends(get_current_user),
         "updated_at": feedback.updated_at.isoformat() + "Z" if feedback.updated_at else ""
     }
 
-@app.get("/api/v1/models/current")
-def get_current_model(current_user: models.User = Depends(get_current_user)):
-    # Read MODELS_DIR from env, fallback to ../models
-    models_dir = os.environ.get("MODELS_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models")))
-    active_path = os.path.join(models_dir, "active.txt")
-    
-    if os.path.exists(active_path):
-        with open(active_path, "r") as f:
-            version = f.read().strip()
-            
-        metadata_path = os.path.join(models_dir, version, "metadata.json")
-        if os.path.exists(metadata_path):
-            with open(metadata_path, "r") as mf:
-                metadata = json.load(mf)
-            return {
-                "active_model": version,
-                "metadata": metadata
-            }
-    
-    raise HTTPException(status_code=404, detail="Model not trained")
 
 @app.get("/api/v1/languages", response_model=schemas.LanguagesResponse)
 def get_languages():

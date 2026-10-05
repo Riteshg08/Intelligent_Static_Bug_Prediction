@@ -54,7 +54,8 @@ def run_analysis(run_id: int):
         file_path_to_id = {}
         
         def norm_path(p):
-            return os.path.normcase(os.path.abspath(str(p)))
+            import pathlib
+            return str(pathlib.Path(p).resolve()).lower()
             
         # All pending files in db
         pending_files = db.query(models.File).filter(models.File.project_id == project.id, models.File.status == "pending").all()

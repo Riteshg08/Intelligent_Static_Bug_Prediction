@@ -8,7 +8,6 @@ export default function BugDetailView() {
   const navigate = useNavigate();
   const [report, setReport] = useState(null);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
-  const [modelData, setModelData] = useState(null);
   const [error, setError] = useState(null);
 
   const fetchReport = useCallback(async () => {
@@ -31,9 +30,7 @@ export default function BugDetailView() {
       })
       .catch(() => {});
       
-    api.get('/models/current')
-      .then(res => setModelData(res.data))
-      .catch(() => {});
+
   }, [fetchReport, id]);
 
   const submitFeedback = async (isBug) => {
@@ -307,24 +304,7 @@ export default function BugDetailView() {
               </div>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-              <div className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                <ShieldCheck className="w-4 h-4 mr-2 text-indigo-500" />
-                Active Model
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-col gap-1">
-                <div className="flex justify-between">
-                  <span>Version:</span>
-                  <span className="font-mono">{modelData?.active_model || 'Fallback/Unknown'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Status:</span>
-                  <span className={modelData?.active_model ? "text-green-600 dark:text-green-400 font-medium" : "text-amber-600 dark:text-amber-400 font-medium"}>
-                    {modelData?.active_model ? 'Stable' : 'Experimental'}
-                  </span>
-                </div>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>

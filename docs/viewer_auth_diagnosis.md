@@ -1,87 +1,21 @@
-# Code Viewer, Auth & Model Performance Diagnosis
+# Viewer & Auth Diagnosis
 
-## Root Cause 1: File Source 404 — Wrong path lookup
+## 1. Code-view Chain and "No functions detected"
+- **Upload**: Files are stored and registered correctly in the `files` table with the relative path. 
+- **Duplicate Endpoint**: The prompt mentioned a duplicate `/api/v1/files/{file_id}/source` endpoint, but current analysis shows only one is present in `main.py` which already returns `{id, path, language, line_count, status, source}` correctly. The frontend reads `.source`. We will leave this working endpoint intact.
+- **Ownership Check**: `main.py` correctly checks ownership via the `project_id` and `current_user.id` join, returning 404 for missing files and 403 for unauthorized access.
+- **Frontend Explorer**: The explorer tree correctly maps paths to files and uses the numeric `fileId` when fetching the source.
+- **"No functions detected" Issue**: The worker fails to map the analysis results back to the database files on Windows because `os.path.abspath(os.path.join(storage_path, f.path))` can mix backslashes and forward slashes, causing a mismatch with the `file_path` generated during extraction (which uses `os.path.join(root, file)`). We will fix this by using `pathlib.Path` in `worker.py` for consistent path normalization on Windows.
 
-**Location**: [`main.py:594-611`](file:///d:/Intelligent_Static_Bug_Prediction/backend/app/main.py#L594-L611)
+## 2. Authentication
+- **Token Lifetime**: Currently hardcoded to 480 minutes (8 hours) in `main.py` rather than reading from env. We will update it to read `ACCESS_TOKEN_EXPIRE_MINUTES` from the environment or default to 480.
+- **SECRET_KEY**: The default is `supersecretkey`. In non-dev environments, it correctly raises a `ValueError` if not set.
+- **Bcrypt/Passlib**: We will pin `bcrypt==4.0.1` and `passlib==1.7.4` to avoid compatibility errors.
+- **401 Loop**: The frontend interceptor in `api.ts` checks `if (window.location.pathname !== '/login')` before redirecting to `/login` after clearing the token, which prevents the loop. We will ensure this logic is robust.
+- **Layout token check**: We need to ensure the route guard uses `/users/me` to validate the token rather than just checking its presence.
 
-The `/api/v1/files/{file_id}/source` endpoint reads `db_file.path` directly with `os.path.exists(db_file.path)`. But `db_file.path` stores a **relative path** (e.g. `real_bugs_sample.py`) as set during upload at line 380 via `os.path.relpath(file_path, start=storage_path)`. The endpoint never reconstructs the absolute path by prepending the storage directory. Result: `os.path.exists("real_bugs_sample.py")` → `False` → 404 "File not found on disk".
-
-Additionally, the endpoint returns `{"source": content}` but the File model stores `source_code` in the database already. The endpoint should return the DB-stored source (no disk dependency) along with file metadata, not just a raw `source` key.
-
-**Fix**: Return `source_code` from the database (already loaded at upload time), and include `id`, `path`, `language`, `line_count`, `status` in the response. Remove the disk-read fallback (the DB is the source of truth). Remove the **duplicate** second endpoint — there is only one, but it has the wrong implementation.
-
-## Root Cause 2: Annotations "No functions detected" — Wrong file path in parser
-
-**Location**: [`main.py:627-644`](file:///d:/Intelligent_Static_Bug_Prediction/backend/app/main.py#L627-L644)
-
-The `/api/v1/files/{file_id}/annotations` endpoint calls `parse_file(db_file.path)` with the **relative** path again. `os.path.exists(db_file.path)` returns `False` on disk, so the `if os.path.exists(...)` guard skips the entire parse → empty `functions` list → "No functions detected".
-
-Even when fixed to use the absolute storage path, Windows backslash paths (`D:\...\real_bugs_sample.py`) may mismatch the parser's expectation. Need `os.path.normcase` + pathlib normalization.
-
-**Fix**: Reconstruct absolute path from `STORAGE_DIR + projects/{project.id} + db_file.path`. Normalize with `pathlib.Path`. Also use Prediction start/end lines stored in DB rather than re-parsing.
-
-## Root Cause 3: prediction_report same path bug
-
-**Location**: [`main.py:674-695`](file:///d:/Intelligent_Static_Bug_Prediction/backend/app/main.py#L674-L695)
-
-Same relative-path bug: `os.path.exists(pred.file.path)` → `False` → hotspots not loaded.
-
-## Root Cause 4: Auth — 401 interceptor redirect loop
-
-**Location**: [`api.ts:128-140`](file:///d:/Intelligent_Static_Bug_Prediction/frontend/src/lib/api.ts#L128-L140)
-
-The 401 interceptor does `window.location.href = '/login'` which causes a hard navigation. If the user is already on `/login` and any API call returns 401 (e.g. a stale token check), it loops. The Layout component at line 13-17 only checks `localStorage.getItem('token')` existence — **any string** passes, including expired tokens.
-
-**Fix**: 
-- Interceptor should NOT redirect if already on `/login`.
-- Layout should validate token by calling `GET /users/me` at startup.
-- Add a `/auth/refresh` endpoint.
-- Set `ACCESS_TOKEN_EXPIRE_MINUTES` to 480 (8 hours), configurable via env.
-
-## Root Cause 5: SECRET_KEY defaults to "supersecretkey" in dev
-
-**Location**: [`main.py:59-63`](file:///d:/Intelligent_Static_Bug_Prediction/backend/app/main.py#L59-L63)
-
-The fallback is only allowed in development, but the warning is silent. Outside dev, it correctly raises. This is acceptable for dev but should log a warning.
-
-## Root Cause 6: bcrypt compatibility
-
-**Location**: [`requirements.txt`](file:///d:/Intelligent_Static_Bug_Prediction/backend/requirements.txt)
-
-`passlib[bcrypt]` without pinning bcrypt version can cause `AttributeError` on newer bcrypt versions that removed `__about__`. Pin `bcrypt>=4.0.0,<5.0.0` and `passlib>=1.7.4`.
-
-## Root Cause 7: Model Performance page — should be removed
-
-The page exists at `/models/performance` with nav links in Layout sidebar and top bar. Per requirements, the page, route, nav links, and unused components should be removed. Keep the backend `/models/current` endpoint only for the model version display in BugDetailView.
-
-## Root Cause 8: Frontend file_source field mismatch
-
-The frontend at `ProjectViewer.tsx:69` reads `res.data.source` from the endpoint. The backend returns `{"source": content}`. After the fix, it should return `{"source_code": ...}` or `{"source": ...}` — we need consistency. We'll keep `source` as the field name in the response for the code viewer.
-
-## Root Cause 9: Explorer shows flat list, not file tree
-
-`ProjectViewer.tsx:199-231` maps `files` as a flat list with just the filename. No folder grouping from path segments.
-
-## Root Cause 10: Missing file summary header
-
-No language/line count/function count/risk summary shown above the code.
-
-## Root Cause 11: No URL-based file selection
-
-`ProjectViewer` only uses `useParams` for `projectId`. The selected file is only in React state. Refresh loses file selection.
-
-## Summary of Fixes
-
-| # | Bug | Root Cause | Fix |
-|---|-----|-----------|-----|
-| 1 | 404 on file source | Relative path not resolved to absolute | Return `source_code` from DB |
-| 2 | No functions detected | `parse_file()` called with relative path | Use DB-stored prediction lines |
-| 3 | prediction_report empty | Same relative path bug | Reconstruct absolute path |
-| 4 | Auth redirect loop | 401 interceptor always redirects | Skip redirect on /login |
-| 5 | Token too short | 30-min lifetime, no refresh | 8-hour default + refresh endpoint |
-| 6 | bcrypt compat | Unpinned versions | Pin bcrypt>=4.0.0 |
-| 7 | Model Performance page | Should be removed | Delete page, route, nav links |
-| 8 | No file tree | Flat file list | Build tree from path segments |
-| 9 | No file summary | Missing component | Add summary header |
-| 10 | No URL file ID | State-only selection | Add `:fileId` to route |
-| 11 | Ownership 403 vs 404 | Source returns 403 not 404 | Return 404 for not-found, 403 for not-owned |
+## 3. UI Fixes
+- **Code Viewer**: Will fix the frontend to show source code escaped properly immediately after upload (before analysis finishes).
+- **Explorer**: Will ensure the file tree is a proper tree.
+- **Error States**: Will implement clear error messages for failed analyses.
+- **Model Performance**: Will remove the model performance page and related UI.
