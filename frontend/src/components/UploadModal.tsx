@@ -196,8 +196,11 @@ export default function UploadModal({ onClose }) {
                           </label>
                           <span className="pl-1">or drag and drop</span>
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                           ZIP, TAR.GZ or single source file up to 50MB
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 max-w-xs mx-auto">
+                          Valid types: {allowedExtensions.join(', ')}
                         </p>
                       </>
                     )}
