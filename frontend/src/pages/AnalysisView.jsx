@@ -9,6 +9,8 @@ export default function AnalysisView() {
   const [status, setStatus] = useState('queued');
   const [predictions, setPredictions] = useState([]);
   const [search, setSearch] = useState('');
+  const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -16,6 +18,7 @@ export default function AnalysisView() {
       setStatus(res.data.status);
     } catch (e) {
       console.error(e);
+      setError("Failed to load analysis status.");
     }
   }, [runId]);
 
@@ -25,6 +28,7 @@ export default function AnalysisView() {
       setPredictions(res.data.sort((a, b) => b.risk_score - a.risk_score));
     } catch (e) {
       console.error(e);
+      setError("Failed to load predictions.");
     }
   }, [runId]);
 
@@ -64,6 +68,25 @@ export default function AnalysisView() {
     (p.file_path && p.file_path.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get(`/analysis/${runId}/export`);
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analysis_${runId}_export.json`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to export JSON.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-w-0 p-8 pt-6 overflow-y-auto">
       <div className="flex items-center text-sm text-gray-500 mb-2">
@@ -74,9 +97,9 @@ export default function AnalysisView() {
       
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-slate-800">Analysis results</h1>
-        <button className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium flex items-center shadow-sm">
+        <button onClick={handleExport} disabled={exporting || status !== 'completed' && status !== 'analyzed'} className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium flex items-center shadow-sm disabled:opacity-50">
           <Download className="w-4 h-4 mr-1.5" />
-          Export JSON
+          {exporting ? 'Exporting...' : 'Export JSON'}
         </button>
       </div>
 
@@ -211,7 +234,7 @@ export default function AnalysisView() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button onClick={() => navigate(`/runs/${runId}/files/${p.file_id}`)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                      <button onClick={() => navigate(`/prediction/${p.id}`)} className="text-gray-400 hover:text-indigo-600 transition-colors">
                         <span className="font-mono text-lg">&lt;/&gt;</span>
                       </button>
                     </td>

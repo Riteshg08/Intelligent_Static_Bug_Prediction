@@ -9,15 +9,22 @@ export default function Dashboard() {
   const [file, setFile] = useState(null);
   const [name, setName] = useState('');
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const navigate = useNavigate();
 
   const fetchProjects = useCallback(async () => {
     try {
+      setLoading(true);
       const res = await api.get('/projects');
       setProjects(res.data);
+      setError(null);
     } catch (err) {
       console.error(err);
+      setError("Failed to load projects.");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -111,6 +118,13 @@ export default function Dashboard() {
         <Info className="w-5 h-5 text-blue-500 mr-2 shrink-0" />
         <span className="text-blue-900"><span className="font-semibold">Risk scores are predictions, not confirmed bugs.</span> Treat probabilities as triage signals and verify findings in context.</span>
       </div>
+      
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-md flex mb-8 text-sm">
+          <AlertTriangle className="w-5 h-5 text-red-500 mr-2 shrink-0" />
+          <span className="text-red-900">{error}</span>
+        </div>
+      )}
 
       {showUpload && (
         <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8 p-6 border border-gray-200">
@@ -263,7 +277,9 @@ export default function Dashboard() {
         ))}
       </div>
       
-      {projects.length === 0 && !showUpload && (
+      {loading ? (
+        <div className="text-center py-12 text-gray-500">Loading projects...</div>
+      ) : projects.length === 0 && !showUpload && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200 shadow-sm mt-4">
           <Folder className="mx-auto h-12 w-12 text-gray-300" />
           <h3 className="mt-2 text-sm font-medium text-gray-900">No projects</h3>

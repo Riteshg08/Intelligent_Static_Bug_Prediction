@@ -8,10 +8,16 @@ export default function BugDetailView() {
   const [report, setReport] = useState(null);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
 
+  const [error, setError] = useState(null);
 
   const fetchReport = useCallback(async () => {
-    const res = await api.get(`/predictions/${id}/report`);
-    setReport(res.data);
+    try {
+      const res = await api.get(`/predictions/${id}/report`);
+      setReport(res.data);
+    } catch (e) {
+      console.error(e);
+      setError("Failed to load bug details.");
+    }
   }, [id]);
 
   useEffect(() => {
@@ -23,14 +29,24 @@ export default function BugDetailView() {
     setFeedbackSaved(true);
   };
 
+  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
   if (!report) return <div className="p-8 text-center text-gray-500">Loading...</div>;
 
-  const reasons = JSON.parse(report.explanation_json || "[]");
+  const reasons = [];
+  if (report.explanation) {
+    Object.values(report.explanation).forEach(val => {
+      if (Array.isArray(val)) {
+        reasons.push(...val);
+      } else if (typeof val === 'string') {
+        reasons.push(val);
+      }
+    });
+  }
 
   return (
     <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-semibold text-gray-900 mb-2">Function: {report.function_name}</h1>
-      <p className="text-gray-500 mb-6">File: {report.file.path} | Language: {report.language}</p>
+      <p className="text-gray-500 mb-6">Language: {report.language}</p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white shadow rounded-md p-6">

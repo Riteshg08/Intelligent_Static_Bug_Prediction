@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Bug, LayoutDashboard, FolderOpen, Code2, Table2, Bell, Plus, Moon, LogOut, ChevronDown } from 'lucide-react';
+import { Bug, LayoutDashboard, FolderOpen, Code2, Table2, Bell, Plus, Moon, LogOut, ChevronDown, Activity } from 'lucide-react';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -23,6 +23,8 @@ export default function Layout() {
     currentSection = "Code review";
   } else if (location.pathname.includes('/analysis/')) {
     currentSection = "Results";
+  } else if (location.pathname.includes('/models/performance')) {
+    currentSection = "Model";
   }
 
   return (
@@ -46,6 +48,10 @@ export default function Layout() {
             <button className={`px-3 py-1.5 rounded-md ${currentSection === 'Results' ? 'text-gray-900 bg-gray-100' : 'text-gray-600 hover:bg-gray-50'}`}>
               <Table2 className="w-4 h-4 inline mr-2 mb-0.5" />
               Results
+            </button>
+            <button className={`px-3 py-1.5 rounded-md ${currentSection === 'Model' ? 'text-gray-900 bg-gray-100' : 'text-gray-600 hover:bg-gray-50'}`} onClick={() => navigate('/models/performance')}>
+              <Activity className="w-4 h-4 inline mr-2 mb-0.5" />
+              Model
             </button>
           </div>
         </div>
@@ -98,6 +104,10 @@ export default function Layout() {
               <Table2 className="w-5 h-5 mr-3" />
               Results
             </div>
+            <NavLink to="/models/performance" className={({ isActive }) => `flex items-center px-3 py-2 rounded-md ${isActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+              <Activity className="w-5 h-5 mr-3" />
+              Model Performance
+            </NavLink>
           </div>
 
           <div className="px-3 space-y-0.5 text-sm font-medium">

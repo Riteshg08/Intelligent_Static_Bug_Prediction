@@ -17,5 +17,50 @@ services:
     ports:
       - "6379:6379"
 
+  backend:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://sbp_user:sbp_password@db:5432/sbp_db
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=supersecret
+      - FRONTEND_URL=http://localhost:5173
+    depends_on:
+      - db
+      - redis
+    command: >
+      bash -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://sbp_user:sbp_password@db:5432/sbp_db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app/backend
+    depends_on:
+      - db
+      - redis
+      - backend
+    command: rq worker sbp_tasks
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
 volumes:
   pgdata:

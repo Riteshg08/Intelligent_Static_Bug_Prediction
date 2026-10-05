@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import AnalysisView from './pages/AnalysisView';
 import BugDetailView from './pages/BugDetailView';
 import ProjectViewer from './pages/ProjectViewer';
+import ModelPerformance from './pages/ModelPerformance';
 
 import Layout from './components/Layout';
 
@@ -18,6 +19,7 @@ function App() {
           <Route path="/projects/:projectId" element={<ProjectViewer />} />
           <Route path="/analysis/:runId" element={<AnalysisView />} />
           <Route path="/prediction/:id" element={<BugDetailView />} />
+          <Route path="/models/performance" element={<ModelPerformance />} />
         </Route>
       </Routes>
     </BrowserRouter>

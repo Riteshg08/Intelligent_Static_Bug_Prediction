@@ -5,6 +5,7 @@ import api from '../lib/api';
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -18,7 +19,7 @@ export default function Login() {
       navigate('/');
     } catch (err) {
       const msg = err.response?.data?.detail || 'Login failed';
-      alert(msg);
+      setError(msg);
     }
   };
 
@@ -30,7 +31,7 @@ export default function Login() {
       navigate('/');
     } catch (err) {
       const msg = err.response?.data?.detail || 'Registration failed';
-      alert(msg);
+      setError(msg);
     }
   };
 
@@ -40,6 +41,7 @@ export default function Login() {
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Sign in or Register</h2>
         </div>
+        {error && <div className="bg-red-50 text-red-700 p-3 rounded-md text-sm text-center border border-red-200">{error}</div>}
         <form className="mt-8 space-y-6">
           <input type="hidden" name="remember" value="true" />
           <div className="rounded-md shadow-sm -space-y-px">
