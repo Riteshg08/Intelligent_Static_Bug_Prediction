@@ -15,7 +15,7 @@ from sbp_predict.engine import PredictionEngine
 import re
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-QUEUE_NAME = os.getenv("QUEUE_NAME", "sbp_tasks")
+QUEUE_NAME = os.getenv("QUEUE_NAME", "analysis")
 redis_conn = Redis.from_url(REDIS_URL)
 task_queue = Queue(QUEUE_NAME, connection=redis_conn)
 
@@ -53,12 +53,15 @@ def run_analysis(run_id: int):
         
         file_path_to_id = {}
         
+        def norm_path(p):
+            return os.path.normcase(os.path.abspath(str(p)))
+            
         # All pending files in db
         pending_files = db.query(models.File).filter(models.File.project_id == project.id, models.File.status == "pending").all()
-        pending_files_by_path = {os.path.abspath(os.path.join(storage_path, f.path)): f for f in pending_files}
+        pending_files_by_path = {norm_path(os.path.join(storage_path, f.path)): f for f in pending_files}
 
         # Mark skipped files
-        skipped_paths = set(os.path.abspath(p[0]) for p in skipped_files_list)
+        skipped_paths = set(norm_path(p[0]) for p in skipped_files_list)
         
         for f_path, db_f in pending_files_by_path.items():
             if f_path in skipped_paths:
@@ -76,7 +79,7 @@ def run_analysis(run_id: int):
         from collections import defaultdict
         features_by_file = defaultdict(list)
         for feat in features:
-            features_by_file[os.path.abspath(feat['file_path'])].append(feat)
+            features_by_file[norm_path(feat['file_path'])].append(feat)
             
         print(f"DEBUG: Found {len(features)} features across {len(features_by_file)} files")
         # predict
@@ -105,20 +108,25 @@ def run_analysis(run_id: int):
                 
                 func_hotspots = [
                     h for h in all_hotspots 
-                    if os.path.abspath(h.get('file_path', '')) == file_path 
+                    if norm_path(h.get('file_path', '')) == file_path 
                     and h.get('start_line', 0) >= func_start
                     and h.get('end_line', 99999) <= func_end
                 ]
                 
                 pattern_severity = "none"
                 if secret_detected:
-                    pattern_severity = "high"
-                elif any(h.get('severity') == 'high' for h in func_hotspots):
-                    pattern_severity = "high"
-                elif any(h.get('severity') == 'warning' for h in func_hotspots):
-                    pattern_severity = "warning"
+                    pattern_severity = "1 high"
                 elif func_hotspots:
-                    pattern_severity = "info"
+                    high_count = sum(1 for h in func_hotspots if h.get('severity') == 'high')
+                    warn_count = sum(1 for h in func_hotspots if h.get('severity') == 'warning')
+                    info_count = sum(1 for h in func_hotspots if h.get('severity') == 'info')
+                    
+                    if high_count > 0:
+                        pattern_severity = f"{high_count} high"
+                    elif warn_count > 0:
+                        pattern_severity = f"{warn_count} warning"
+                    else:
+                        pattern_severity = f"{info_count} info"
                     
                 prediction = models.Prediction(
                     file_id=db_file_id,
@@ -141,7 +149,7 @@ def run_analysis(run_id: int):
 
         # Save hotspots
         for h in all_hotspots:
-            h_path = os.path.abspath(h.get('file_path'))
+            h_path = norm_path(h.get('file_path'))
             file_id = file_path_to_id.get(h_path)
             if not file_id:
                 rel_path = os.path.relpath(h.get('file_path'), start=storage_path)

@@ -133,5 +133,7 @@ def extract_features(func: FunctionExtractionResult, file_content: bytes, file_i
         "code_smell_count": code_smell_count,
         "duplicate_code_ratio": 0.0, # Will be computed globally if needed, MVP = 0
         "language": func.language,
-        "is_method": "." in func.qualified_name or "::" in func.qualified_name or func.language in ["Java", "C#"] or "::" in func.source_text.split("(")[0]
+        "is_method": "." in func.qualified_name or "::" in func.qualified_name or func.language in ["Java", "C#"] or "::" in func.source_text.split("(")[0],
+        "content_hash": __import__('hashlib').md5(func.source_text.encode('utf-8')).hexdigest(),
+        "function_code": func.source_text
     }

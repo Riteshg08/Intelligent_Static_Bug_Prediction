@@ -1,95 +1,131 @@
 import { test, expect } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
-test.describe('E2E Flow', () => {
-  // Use a unique username to avoid conflicts
-  const uniqueUsername = `testuser_${Date.now()}`;
+test.describe('Intelligent Static Bug Prediction E2E', () => {
+  const username = `testuser_${Date.now()}`;
   const password = 'password123';
+  const username2 = `testuser2_${Date.now()}`;
 
-  test('full upload-to-results flow', async ({ page }) => {
-    // 1. Register and Login
+  test.beforeEach(async ({ page }) => {
+    // Go to login page
     await page.goto('http://localhost:5173/login');
-    await page.fill('input[name="username"]', uniqueUsername);
+  });
+
+  test('full verification flow', async ({ page, context }) => {
+    // 1. Register and Login
+    await page.fill('input[name="username"]', username);
     await page.fill('input[name="password"]', password);
     await page.click('button:has-text("Register")');
+    await expect(page.locator('text=Your projects')).toBeVisible({ timeout: 10000 });
 
-    // Should redirect to dashboard
-    await expect(page.locator('text=Overview')).toBeVisible({ timeout: 10000 });
+    // Dark mode toggle test
+    const html = page.locator('html');
+    await page.click('button[title="Toggle dark mode"]');
+    await expect(html).toHaveClass(/dark/);
+    await page.click('button[title="Toggle dark mode"]');
+    await expect(html).not.toHaveClass(/dark/);
 
-    // 2. Upload test_project.zip
-    // Click "New analysis" button (if not already showing) or handle empty state "New Analysis"
+    // 2. Upload real_bugs_sample.py
     await page.click('button:has-text("New analysis"), button:has-text("New Analysis")');
+    await page.fill('input[type="text"]', 'Real Bugs Project');
     
-    // Fill project name and upload file
-    await page.fill('input[type="text"]', 'My Test Project');
-    
-    // Setup file chooser intercept before clicking the file input
-    const [fileChooser] = await Promise.all([
-      page.waitForEvent('filechooser'),
-      page.locator('input[type="file"]').click()
-    ]);
-    await fileChooser.setFiles('../test_project.zip');
-    
-    // Click Upload
+    await page.locator('input[type="file"]').setInputFiles('../real_bugs_sample.py');
     await page.click('button:has-text("Upload")');
 
-    // 3. Source code shown immediately
+    // 3. Instant code display & analysis progress
     await expect(page.locator('text=Code review').first()).toBeVisible({ timeout: 60000 });
-    await expect(page.locator('text=messy.py')).toBeVisible({ timeout: 60000 });
-
-    // 4. Background analysis with progress
-    // Wait for "Analysis running..." to disappear
+    await expect(page.locator('text=real_bugs_sample.py').first()).toBeVisible({ timeout: 60000 });
     await expect(page.locator('text=Analysis running...')).toBeHidden({ timeout: 60000 });
-    
-    // 5. Navigate to Ranked Results
+
+    // 4. Navigate to Ranked Results
     await page.locator('button').filter({ hasText: 'Results' }).last().click();
     await expect(page.locator('text=Function risk ranking').first()).toBeVisible({ timeout: 10000 });
     
-    // 6. Check that messy functions rank above tiny ones
-    // Wait for predictions to load
-    await expect(page.locator('text=messy_func').first()).toBeVisible();
-    await expect(page.locator('text=tiny').first()).toBeVisible();
-    
-    // Grab all function names from the table to check order
+    await expect(page.locator('tbody tr td:first-child div.font-bold').first()).toBeVisible({ timeout: 10000 });
+
+    // 5. Verify real_bugs_sample.py pattern findings & ML risks
     const functionNames = await page.locator('tbody tr td:first-child div.font-bold').allTextContents();
-    const messyIndex = functionNames.findIndex(name => name.includes('messy_func'));
-    const tinyIndex = functionNames.findIndex(name => name.includes('tiny'));
     
-    expect(messyIndex).toBeLessThan(tinyIndex);
+    // ship_order ranks higher than tiny functions
+    const shipOrderIdx = functionNames.findIndex(n => n.includes('ship_order'));
+    const addIdx = functionNames.findIndex(n => n.includes('add'));
+    expect(shipOrderIdx).toBeLessThan(addIdx);
+    
+    // Check pattern findings by clicking on functions
+    const verifyFindings = async (funcName, patterns) => {
+      await page.locator(`tr:has-text("${funcName}") >> button`).first().click();
+      await expect(page.locator(`h1:has-text("${funcName}")`)).toBeVisible({ timeout: 10000 });
+      for (const pattern of patterns) {
+        await expect(page.locator(`text=${pattern}`).first()).toBeVisible();
+      }
+      await page.click('button:has-text("Back to results")');
+    };
 
-    // 7. Click a function to see highlights and an explanation
-    await page.locator('tr:has-text("messy_func") >> button').click();
+    await verifyFindings('loop_example', ['Possible off-by-one error']);
+    await verifyFindings('process_data', ['Mutable default argument is shared']);
+    await verifyFindings('handle_error', ['Bare except clause', 'Empty error handler']);
+    await verifyFindings('auth_check', ['Condition with literal OR is always true']);
+    await verifyFindings('calculate', ['Comparison used as a statement has no effect']);
+    await verifyFindings('read_file', ['Resource opened but not closed']);
+
+    // Tiny functions should not be High
+    await page.locator('tr:has-text("add") >> button').first().click();
+    await expect(page.locator('h1:has-text("add")')).toBeVisible();
+    await expect(page.locator('text=High')).toBeHidden();
     
-    // Verify BugDetailView loaded
-    await expect(page.locator('h1:has-text("Function: messy_func")')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=Risk Assessment')).toBeVisible();
-    await expect(page.locator('text=Explanations')).toBeVisible();
-    
-    // 8. Submit feedback
+    // Feedback
     await page.click('button:has-text("Yes, it\'s a bug")');
-    await expect(page.locator('text=Feedback saved successfully')).toBeVisible();
-    
-    // 9. View model performance
-    await page.click('a:has-text("Model Performance")');
-    await expect(page.locator('h1:has-text("Model Performance")')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=Test AUC').first()).toBeVisible();
+    await expect(page.locator('text=Feedback saved')).toBeVisible();
+    await page.click('button:has-text("Back to results")');
 
-    // 10. Check broken_syntax.py shows as skipped and notes.txt shows as unsupported.
-    // notes.txt shouldn't even be analyzed, but we can verify in Project Viewer
+    // Filters (filter out clean functions)
+    await page.selectOption('select:has-text("All Levels")', { label: 'High' });
+    await expect(page.locator('text=add')).toBeHidden();
+    await page.selectOption('select:has-text("High")', { label: 'All Levels' });
+
+    // 6. Upload sample_buggy_code.py
     await page.click('a:has-text("Projects")');
-    await page.locator('h3').filter({ hasText: 'My Test Project' }).first().click(); // Go to project view
+    await page.click('button:has-text("New analysis"), button:has-text("New Analysis")');
+    await page.fill('input[type="text"]', 'Sample Buggy Project');
     
-    // Actually notes.txt will be in Project Viewer ? No, backend only supports py, js, java, c, cpp, ts, go. 
-    // And broken_syntax.py will have status "skipped" or have skipped files warning.
-    await expect(page.locator('text=broken_syntax.py').first()).toBeVisible();
-    await expect(page.locator('text=notes.txt').first()).toBeVisible();
+    await page.locator('input[type="file"]').setInputFiles('../sample_buggy_code.py');
+    await page.click('button:has-text("Upload")');
+    await expect(page.locator('text=Analysis running...')).toBeHidden({ timeout: 60000 });
+
+    await page.locator('button').filter({ hasText: 'Results' }).last().click();
+    await verifyFindings('authenticate_user', ['SQL injection']);
+    await verifyFindings('execute_system_command', ['command execution']);
+    await verifyFindings('evaluate_math_expression', ['Insecure use of eval']);
+    await verifyFindings('process_data', ['Possible off-by-one error']);
+    await verifyFindings('run_background_task', ['shell=True']);
+
+    // Hardcoded secret is file-level, check if it's assigned to any function (likely module-level/first function)
+    // Or just look for the text in the results or code viewer
+    await page.click('button:has-text("Files")');
+    await page.locator('tr:has-text("sample_buggy_code.py") >> button').first().click();
+    await expect(page.locator('text=Hardcoded secret')).toBeVisible();
+
+    // 7. Upload test_project.zip
+    await page.click('a:has-text("Projects")');
+    await page.click('button:has-text("New analysis"), button:has-text("New Analysis")');
+    await page.fill('input[type="text"]', 'Zip Project');
     
-    // Check their statuses (skipped and unsupported)
-    // ProjectViewer displays them like: `Skipped files: broken_syntax.py` or similar? No, the files list in ProjectViewer has a status badge.
-    // Or we just expect the text "skipped" and "unsupported" to be visible
+    await page.locator('input[type="file"]').setInputFiles('../test_project.zip');
+    await page.click('button:has-text("Upload")');
+    await expect(page.locator('text=Analysis running...')).toBeHidden({ timeout: 60000 });
+    
+    // Check broken file and unsupported file
+    await expect(page.locator('text=broken_syntax.py')).toBeVisible();
+    await expect(page.locator('text=notes.txt')).toBeVisible();
     await expect(page.locator('text=skipped').first()).toBeVisible();
     await expect(page.locator('text=unsupported').first()).toBeVisible();
-    
-    // 11. Export JSON (optional UI click, but can't easily verify download in Playwright without special config, we just verify it exists in Results)
+
+    // 8. Model performance removed as per requirements
+
+    // 9. Export
+    await page.click('a:has-text("Projects")');
+    await page.locator('h3').filter({ hasText: 'Zip Project' }).first().click();
     await page.locator('button').filter({ hasText: 'Results' }).last().click();
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -97,8 +133,22 @@ test.describe('E2E Flow', () => {
     ]);
     expect(download.suggestedFilename()).toContain('export.json');
 
-    // 12. Logout
-    await page.click('button[title="Logout"]');
+    // Get current URL for cross-user test
+    const projectUrl = page.url();
+
+    // 10. Logout and Cross-user access denied
+    await page.click('button[title="Logout"], button:has-text("Logout"), a:has-text("Logout")');
     await expect(page.locator('text=Sign in or Register')).toBeVisible({ timeout: 10000 });
+
+    // Register user 2
+    await page.fill('input[name="username"]', username2);
+    await page.fill('input[name="password"]', password);
+    await page.click('button:has-text("Register")');
+    await expect(page.locator('text=Your projects')).toBeVisible({ timeout: 10000 });
+
+    // Try to access user 1's project
+    const response = await page.goto(projectUrl);
+    // Should be redirected or show 404/Error
+    await expect(page.locator('text=Not Found').or(page.locator('text=Error')).or(page.locator('text=not found', { exact: false }))).toBeVisible();
   });
 });

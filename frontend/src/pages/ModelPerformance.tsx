@@ -13,8 +13,12 @@ export default function ModelPerformance() {
         const res = await api.get('/models/current');
         setModelData(res.data);
       } catch (err) {
-        console.error(err);
-        setError("Failed to load model performance data.");
+        if (err.response?.status === 404) {
+          setModelData(null);
+        } else {
+          console.error(err);
+          setError("Failed to load model performance data.");
+        }
       } finally {
         setLoading(false);
       }
@@ -24,6 +28,18 @@ export default function ModelPerformance() {
 
   if (loading) return <div className="p-8 text-center text-gray-500 dark:text-gray-400">Loading model performance...</div>;
   if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+  if (!modelData) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-w-0 p-8 h-full overflow-hidden">
+        <Activity className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Model not trained</h2>
+        <p className="text-gray-500 dark:text-gray-400 mt-2 text-center max-w-md">
+          There is no active model trained on the dataset yet. Please complete the data extraction and training process.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col min-w-0 p-8 pt-6 overflow-y-auto">
@@ -77,29 +93,87 @@ export default function ModelPerformance() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6">
-        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Detailed Metrics</h2>
-        
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 dark:bg-gray-900">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Metric</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Value</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200">
-              {modelData?.metadata?.metrics && Object.entries(modelData.metadata.metrics).map(([key, value]) => (
-                <tr key={key}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{key.replace(/_/g, ' ')}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {typeof value === 'number' ? value.toFixed(4) : value}
-                  </td>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6">
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Detailed Metrics</h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 dark:bg-gray-900">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Metric</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Value</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200">
+                {modelData?.metadata?.metrics && Object.entries(modelData.metadata.metrics).map(([key, value]) => {
+                  if (key === 'confusion_matrix') return null; // Rendered separately
+                  return (
+                    <tr key={key}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{key.replace(/_/g, ' ').toUpperCase()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {typeof value === 'number' ? value.toFixed(4) : String(value)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          
+          {modelData?.metadata?.metrics?.confusion_matrix && (
+            <div className="mt-8">
+              <h3 className="text-md font-bold text-slate-800 dark:text-white mb-3">Confusion Matrix</h3>
+              <div className="grid grid-cols-3 gap-2 text-center text-sm max-w-sm">
+                <div></div>
+                <div className="font-semibold text-gray-600 dark:text-gray-400">Pred: Clean</div>
+                <div className="font-semibold text-gray-600 dark:text-gray-400">Pred: Buggy</div>
+                
+                <div className="font-semibold text-gray-600 dark:text-gray-400 text-right pr-2">Actual: Clean</div>
+                <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded text-gray-900 dark:text-white border border-green-200 dark:border-green-800">
+                  {modelData.metadata.metrics.confusion_matrix[0][0]} <br/><span className="text-xs text-gray-500">(TN)</span>
+                </div>
+                <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded text-gray-900 dark:text-white border border-red-200 dark:border-red-800">
+                  {modelData.metadata.metrics.confusion_matrix[0][1]} <br/><span className="text-xs text-gray-500">(FP)</span>
+                </div>
+                
+                <div className="font-semibold text-gray-600 dark:text-gray-400 text-right pr-2">Actual: Buggy</div>
+                <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded text-gray-900 dark:text-white border border-orange-200 dark:border-orange-800">
+                  {modelData.metadata.metrics.confusion_matrix[1][0]} <br/><span className="text-xs text-gray-500">(FN)</span>
+                </div>
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded text-gray-900 dark:text-white border border-blue-200 dark:border-blue-800">
+                  {modelData.metadata.metrics.confusion_matrix[1][1]} <br/><span className="text-xs text-gray-500">(TP)</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
+
+        {modelData?.metadata?.feature_importance && (
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Feature Importance</h2>
+            <div className="space-y-4">
+              {Object.entries(modelData.metadata.feature_importance)
+                .sort(([, a], [, b]) => Number(b) - Number(a))
+                .slice(0, 10)
+                .map(([feature, importance]) => {
+                  const numImportance = Number(importance);
+                  const maxImportance = Math.max(...Object.values(modelData.metadata.feature_importance).map(Number));
+                  const percent = maxImportance > 0 ? (numImportance / maxImportance) * 100 : 0;
+                  return (
+                    <div key={feature}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-700 dark:text-gray-300 font-medium">{feature.replace(/_/g, ' ')}</span>
+                        <span className="text-gray-500">{numImportance.toFixed(4)}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${percent}%` }}></div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

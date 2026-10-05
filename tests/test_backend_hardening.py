@@ -12,6 +12,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../static-analysis')))
 
+os.environ["DATABASE_URL"] = "sqlite:///./test_hardening.db"
+
 from app.main import app, limiter
 from app.database import get_db, Base
 from app.models import User, Project, AnalysisRun, Prediction
@@ -90,8 +92,11 @@ def test_malicious_zip(test_user):
     assert res.status_code == 400
     assert "slip" in res.json()["detail"].lower()
 
+from app.config import settings
+
 def test_oversized_upload(test_user):
-    os.environ["MAX_UPLOAD_SIZE"] = "100" # 100 bytes
+    original_size = settings.max_upload_size
+    settings.max_upload_size = 100 # 100 bytes
     large_content = b"a" * 200
     
     res = client.post(
@@ -100,9 +105,9 @@ def test_oversized_upload(test_user):
         data={"name": "Oversized"},
         files={"file": ("large.py", large_content)}
     )
+    settings.max_upload_size = original_size
     assert res.status_code == 413
     assert "too large" in res.json()["detail"].lower()
-    os.environ.pop("MAX_UPLOAD_SIZE")
 
 def test_feedback_round_trip(test_user):
     # Create a project and file

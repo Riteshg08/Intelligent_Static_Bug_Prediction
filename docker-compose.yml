@@ -5,7 +5,7 @@ x-env: &env
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   SECRET_KEY: ${SECRET_KEY:-supersecret}
   FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
-  QUEUE_NAME: ${QUEUE_NAME:-sbp_tasks}
+  QUEUE_NAME: ${QUEUE_NAME:-analysis}
   ENV: ${ENV:-production}
 
 services:
@@ -63,7 +63,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: rq worker ${QUEUE_NAME:-sbp_tasks}
+    command: rq worker ${QUEUE_NAME:-analysis}
     volumes:
       - ./static-analysis:/app/static-analysis
       - ./models:/app/models

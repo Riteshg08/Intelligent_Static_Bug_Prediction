@@ -20,9 +20,13 @@ from . import models, database, schemas
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+
+# Create tables
+models.Base.metadata.create_all(bind=database.engine)
 from fastapi import Request
 import json
 from pythonjsonlogger import jsonlogger
+import logging
 
 # Structured JSON logging
 logHandler = logging.StreamHandler()
@@ -58,7 +62,7 @@ if not SECRET_KEY:
         raise ValueError("SECRET_KEY must be set outside development environment.")
     SECRET_KEY = "supersecretkey"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 480
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
@@ -101,6 +105,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise credentials_exception
     return user
+
+@app.post("/api/v1/auth/refresh", response_model=Token)
+@limiter.limit("10/minute")
+def refresh_token(request: Request, current_user: models.User = Depends(get_current_user)):
+    access_token = create_access_token(data={"sub": current_user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/health")
 def health_check():
@@ -181,8 +191,12 @@ def get_projects(current_user: models.User = Depends(get_current_user), db: Sess
         high = 0
         medium = 0
         low = 0
+        p_high = 0
+        p_medium = 0
+        p_low = 0
         func_count = 0
         last_updated = latest_run.created_at.isoformat() + "Z" if latest_run else None
+        status = latest_run.status if latest_run else "unknown"
         
         if latest_run and latest_run.status in ["analyzed", "completed"]:
             preds = db.query(models.Prediction).filter(models.Prediction.run_id == latest_run.id).all()
@@ -192,14 +206,23 @@ def get_projects(current_user: models.User = Depends(get_current_user), db: Sess
                 elif p.risk_level == "Medium": medium += 1
                 else: low += 1
                 
+                if p.pattern_severity and 'high' in p.pattern_severity:
+                    p_high += 1
+                elif p.pattern_severity and 'warning' in p.pattern_severity:
+                    p_medium += 1
+                elif p.pattern_severity and 'info' in p.pattern_severity:
+                    p_low += 1
+                
         result.append({
             "id": proj.id,
             "name": proj.name,
             "languages": langs,
             "risk_counts": {"high": high, "medium": medium, "low": low},
+            "pattern_counts": {"high": p_high, "medium": p_medium, "low": p_low},
             "function_count": func_count,
             "last_updated": last_updated,
-            "latest_run_id": latest_run.id if latest_run else None
+            "latest_run_id": latest_run.id if latest_run else None,
+            "status": status
         })
     return result
 
@@ -576,22 +599,22 @@ def analysis_files(run_id: int, current_user: models.User = Depends(get_current_
 
 @app.get("/api/v1/files/{file_id}/source")
 def file_source(file_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
-    db_file = db.query(models.File).join(models.Project).filter(
-        models.File.id == file_id,
-        models.Project.owner_id == current_user.id
-    ).first()
+    db_file = db.query(models.File).filter(models.File.id == file_id).first()
     if not db_file:
-        raise HTTPException(status_code=403)
+        raise HTTPException(status_code=404, detail="File not found")
         
-    try:
-        if os.path.exists(db_file.path):
-            with open(db_file.path, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read(1024 * 1024) # limit to 1MB
-            return {"source": content}
-        else:
-            raise HTTPException(status_code=404, detail="File not found on disk")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    project = db.query(models.Project).filter(models.Project.id == db_file.project_id).first()
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+        
+    return {
+        "id": db_file.id,
+        "path": db_file.path,
+        "language": db_file.language,
+        "line_count": db_file.line_count,
+        "status": db_file.status,
+        "source": db_file.source_code
+    }
 
 @app.get("/api/v1/files/{file_id}/annotations", response_model=schemas.AnnotationsResponse)
 def file_annotations(file_id: int, run_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
@@ -607,24 +630,16 @@ def file_annotations(file_id: int, run_id: int, current_user: models.User = Depe
         models.Prediction.run_id == run_id
     ).all()
     
-    from sbp_analysis.parser import parse_file
     functions = []
-    if os.path.exists(db_file.path):
-        try:
-            funcs = parse_file(db_file.path)
-            for p in preds:
-                func_info = next((f for f in funcs if f.function_name == p.function_name), None)
-                if func_info:
-                    functions.append({
-                        "id": p.id,
-                        "name": p.function_name,
-                        "start_line": func_info.start_line,
-                        "end_line": func_info.end_line,
-                        "risk_score": p.risk_score,
-                        "risk_level": p.risk_level
-                    })
-        except Exception:
-            pass
+    for p in preds:
+        functions.append({
+            "id": p.id,
+            "name": p.function_name,
+            "start_line": p.start_line,
+            "end_line": p.end_line,
+            "risk_score": p.risk_score,
+            "risk_level": p.risk_level
+        })
             
     hotspots = db.query(models.Hotspot).filter(
         models.Hotspot.file_id == file_id,
@@ -652,30 +667,21 @@ def prediction_report(id: int, current_user: models.User = Depends(get_current_u
         raise HTTPException(status_code=404)
         
     import json
-    from sbp_analysis.parser import parse_file
-    
     hotspots_list = []
-    try:
-        if os.path.exists(pred.file.path):
-            funcs = parse_file(pred.file.path)
-            func_info = next((f for f in funcs if f.function_name == pred.function_name), None)
-            
-            if func_info:
-                hotspots = db.query(models.Hotspot).filter(
-                    models.Hotspot.file_id == pred.file_id,
-                    models.Hotspot.run_id == pred.run_id,
-                    models.Hotspot.start_line >= func_info.start_line,
-                    models.Hotspot.end_line <= func_info.end_line
-                ).all()
-                hotspots_list = [{
-                    "severity": h.severity,
-                    "rule_id": h.rule_id,
-                    "message": h.message,
-                    "start_line": h.start_line,
-                    "end_line": h.end_line
-                } for h in hotspots]
-    except Exception:
-        pass
+    if pred.start_line is not None and pred.end_line is not None:
+        hotspots = db.query(models.Hotspot).filter(
+            models.Hotspot.file_id == pred.file_id,
+            models.Hotspot.run_id == pred.run_id,
+            models.Hotspot.start_line >= pred.start_line,
+            models.Hotspot.end_line <= pred.end_line
+        ).all()
+        hotspots_list = [{
+            "severity": h.severity,
+            "rule_id": h.rule_id,
+            "message": h.message,
+            "start_line": h.start_line,
+            "end_line": h.end_line
+        } for h in hotspots]
         
     return {
         "id": pred.id,
@@ -739,25 +745,26 @@ def get_feedback(id: int, current_user: models.User = Depends(get_current_user),
         "updated_at": feedback.updated_at.isoformat() + "Z" if feedback.updated_at else ""
     }
 
-@app.get("/api/v1/models/current", response_model=schemas.ModelCurrentResponse)
+@app.get("/api/v1/models/current")
 def get_current_model(current_user: models.User = Depends(get_current_user)):
-    active_path = "../models/active.txt"
+    # Read MODELS_DIR from env, fallback to ../models
+    models_dir = os.environ.get("MODELS_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models")))
+    active_path = os.path.join(models_dir, "active.txt")
+    
     if os.path.exists(active_path):
         with open(active_path, "r") as f:
             version = f.read().strip()
             
-        metadata_path = f"../models/{version}/metadata.json"
+        metadata_path = os.path.join(models_dir, version, "metadata.json")
         if os.path.exists(metadata_path):
             with open(metadata_path, "r") as mf:
                 metadata = json.load(mf)
             return {
-                "version": version,
-                "thresholds": metadata.get("thresholds"),
-                "languages": metadata.get("languages"),
-                "dataset_summary": metadata.get("dataset_summary")
+                "active_model": version,
+                "metadata": metadata
             }
-        return {"version": version}
-    return {"version": "unknown"}
+    
+    raise HTTPException(status_code=404, detail="Model not trained")
 
 @app.get("/api/v1/languages", response_model=schemas.LanguagesResponse)
 def get_languages():

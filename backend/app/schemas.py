@@ -11,9 +11,11 @@ class ProjectResponse(BaseModel):
     name: str
     languages: List[str]
     risk_counts: RiskCounts
+    pattern_counts: RiskCounts
     function_count: int
     last_updated: Optional[str] = None
     latest_run_id: Optional[int] = None
+    status: Optional[str] = None
 
 class FileData(BaseModel):
     id: int

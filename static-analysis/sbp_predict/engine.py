@@ -49,7 +49,7 @@ class PredictionEngine:
     def _load_active(self):
         active_file = os.path.join(self.models_dir, "active.txt")
         if not os.path.exists(active_file):
-            raise RuntimeError(f"Model not trained (no active.txt in {self.models_dir})")
+            return
             
         with open(active_file, "r") as f:
             self.active_version = f.read().strip()
@@ -57,30 +57,47 @@ class PredictionEngine:
         version_dir = os.path.join(self.models_dir, self.active_version)
         meta_path = os.path.join(version_dir, "metadata.json")
         if not os.path.exists(meta_path):
-            raise RuntimeError(f"Model not trained (missing metadata.json in {version_dir})")
+            self.active_version = None
+            return
             
         with open(meta_path, "r") as f:
             self.metadata = json.load(f)
             
         if self.metadata.get("global_model"):
             gm_path = os.path.join(version_dir, "model_global.joblib")
-            if not os.path.exists(gm_path):
-                raise RuntimeError("Model not trained (missing model_global.joblib)")
-            self.models["global"] = joblib.load(gm_path)
+            if os.path.exists(gm_path):
+                self.models["global"] = joblib.load(gm_path)
             
         for lang in self.metadata.get("languages", {}):
             lang_info = self.metadata["languages"][lang]
             if lang_info.get("status") == "dedicated":
                 lm_path = os.path.join(version_dir, f"model_{lang}.joblib")
-                if not os.path.exists(lm_path):
-                    raise RuntimeError(f"Model not trained (missing dedicated model for {lang})")
-                self.models[lang] = joblib.load(lm_path)
+                if os.path.exists(lm_path):
+                    self.models[lang] = joblib.load(lm_path)
                 
     def predict(self, extracted_features: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if not extracted_features:
             return []
             
         lang = extracted_features[0].get("language", "Unknown")
+        
+        if self.active_version is None:
+            # Model not trained, fallback to reporting low risk for everything
+            results = []
+            for func in extracted_features:
+                results.append({
+                    "function_name": func.get("function_name"),
+                    "file_path": func.get("file_path"),
+                    "start_line": func.get("start_line"),
+                    "end_line": func.get("end_line"),
+                    "language": lang,
+                    "risk_score": 0.0,
+                    "risk_level": "Low",
+                    "model_version": "unknown",
+                    "confidence_note": "Model not trained",
+                    "explanation": ["Model not trained. Run ML pipeline to enable statistical predictions."]
+                })
+            return results
         
         # Batch all features for the file
         feature_dicts = []
@@ -104,7 +121,8 @@ class PredictionEngine:
         if not model:
             return [{"error": "No model available"} for _ in extracted_features]
             
-        probs = model.predict_proba(df)[:, 1]
+        import numpy as np
+        probs = np.array(model.predict_proba(df))[:, 1]
         
         thresholds = self.metadata.get("thresholds", {"low": 0.35, "medium": 0.65})
         importances = {}

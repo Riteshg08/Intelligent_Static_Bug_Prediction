@@ -3,8 +3,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../test.db"))
 SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL", "sqlite:///./test.db"
+    "DATABASE_URL", f"sqlite:///{db_path}"
 )
 
 # For tests we might want sqlite

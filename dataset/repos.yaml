@@ -1,6 +1,43 @@
+# Python Repositories
 Python:
-  - url: https://github.com/bottlepy/bottle.git
-    name: bottle
+  - https://github.com/django/django.git
+  - https://github.com/pallets/flask.git
+  - https://github.com/psf/requests.git
+  - https://github.com/pandas-dev/pandas.git
+  - https://github.com/scikit-learn/scikit-learn.git
+  - https://github.com/pytest-dev/pytest.git
+  - https://github.com/ansible/ansible.git
+  - https://github.com/celery/celery.git
+
+# JavaScript / TypeScript Repositories
 JavaScript:
-  - url: https://github.com/expressjs/express.git
-    name: express
+  - https://github.com/expressjs/express.git
+  - https://github.com/facebook/react.git
+  - https://github.com/vuejs/vue.git
+  - https://github.com/eslint/eslint.git
+  - https://github.com/webpack/webpack.git
+  - https://github.com/microsoft/TypeScript.git
+  - https://github.com/axios/axios.git
+  - https://github.com/prettier/prettier.git
+
+# Java Repositories
+Java:
+  - https://github.com/apache/commons-lang.git
+  - https://github.com/google/guava.git
+  - https://github.com/apache/kafka.git
+  - https://github.com/apache/lucene.git
+  - https://github.com/spring-projects/spring-boot.git
+  - https://github.com/elastic/elasticsearch.git
+  - https://github.com/mockito/mockito.git
+  - https://github.com/junit-team/junit5.git
+
+# Go Repositories
+Go:
+  - https://github.com/etcd-io/etcd.git
+  - https://github.com/prometheus/prometheus.git
+  - https://github.com/gohugoio/hugo.git
+  - https://github.com/moby/moby.git
+  - https://github.com/kubernetes/kubernetes.git
+  - https://github.com/hashicorp/terraform.git
+  - https://github.com/gin-gonic/gin.git
+  - https://github.com/golang/go.git

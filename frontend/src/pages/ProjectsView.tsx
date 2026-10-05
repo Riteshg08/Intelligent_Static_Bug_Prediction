@@ -69,6 +69,17 @@ export default function Dashboard() {
     }
   };
 
+  const handleReanalyze = async (id) => {
+    try {
+      await api.post(`/projects/${id}/analyze`);
+      setProjects(projects.map(p => p.id === id ? { ...p, status: 'queued' } : p));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to restart analysis");
+    }
+    setOpenMenuId(null);
+  };
+
   const viewProject = (projectId) => {
     navigate(`/projects/${projectId}`);
   };
@@ -88,6 +99,9 @@ export default function Dashboard() {
   const totalHigh = projects.reduce((acc, p) => acc + (p.risk_counts?.high || 0), 0);
   const totalMedium = projects.reduce((acc, p) => acc + (p.risk_counts?.medium || 0), 0);
   const totalLow = projects.reduce((acc, p) => acc + (p.risk_counts?.low || 0), 0);
+  
+  const totalPatternHigh = projects.reduce((acc, p) => acc + (p.pattern_counts?.high || 0), 0);
+  const totalPatternMedium = projects.reduce((acc, p) => acc + (p.pattern_counts?.medium || 0), 0);
 
   const formatTimeAgo = (dateStr) => {
     if (!dateStr) return 'Never';
@@ -160,12 +174,12 @@ export default function Dashboard() {
         </div>
         <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-28">
           <div className="flex justify-between items-start">
-            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Low risk</span>
-            <CheckCircle2 className="w-5 h-5 text-green-500" />
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Pattern risks</span>
+            <Info className="w-5 h-5 text-blue-500" />
           </div>
           <div>
-            <div className="text-3xl font-bold text-slate-800 dark:text-white">{totalLow}</div>
-            <div className="text-xs text-gray-400 mt-1">4 recent analyses</div>
+            <div className="text-3xl font-bold text-slate-800 dark:text-white">{totalPatternHigh + totalPatternMedium}</div>
+            <div className="text-xs text-gray-400 mt-1">High & Warning patterns</div>
           </div>
         </div>
       </div>
@@ -192,16 +206,22 @@ export default function Dashboard() {
                   <MoreHorizontal className="w-5 h-5" />
                 </button>
                 {openMenuId === project.id && (
-                  <div className="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10 overflow-hidden">
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700 py-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); viewProject(project.id); }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 font-medium"
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
                     >
                       Open
                     </button>
                     <button
+                      onClick={(e) => { e.stopPropagation(); handleReanalyze(project.id); }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
+                    >
+                      Re-analyze
+                    </button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}
-                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:bg-red-900/30 font-medium border-t border-gray-100"
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 font-medium border-t border-gray-100 dark:border-gray-700"
                     >
                       Delete
                     </button>
@@ -214,26 +234,49 @@ export default function Dashboard() {
               <h3 className="text-base font-bold text-gray-900 dark:text-white mr-2 truncate">{project.name}</h3>
             </div>
             
-            <div className="flex flex-wrap gap-1 mb-4">
-              {(project.languages || []).map(lang => (
-                <span key={lang} className="text-xs bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded">
-                  {lang}
-                </span>
-              ))}
+            <div className="flex items-center justify-between mb-4 mt-2">
+              <div className="flex flex-wrap gap-1">
+                {(project.languages || []).map(lang => (
+                  <span key={lang} className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded font-medium">
+                    {lang}
+                  </span>
+                ))}
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                project.status === 'completed' || project.status === 'analyzed' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                project.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' :
+                'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+              }`}>
+                {project.status || 'unknown'}
+              </span>
             </div>
             
-            <div className="flex justify-between mt-auto pt-4">
+            <div className="flex justify-between mt-auto pt-2">
               <div className="flex flex-col">
-                <span className="text-red-500 font-bold text-lg leading-tight">{project.risk_counts?.high || 0}</span>
-                <span className="text-[10px] text-gray-400 uppercase tracking-wider">High</span>
+                <div className="flex items-baseline space-x-1">
+                  <span className="text-red-500 font-bold text-lg leading-tight">{project.risk_counts?.high || 0}</span>
+                  <span className="text-red-300 text-[10px]">ML</span>
+                </div>
+                <div className="flex items-baseline space-x-1">
+                  <span className="text-red-700 dark:text-red-400 font-bold text-sm leading-tight">{project.pattern_counts?.high || 0}</span>
+                  <span className="text-gray-400 text-[10px]">Pat</span>
+                </div>
+                <span className="text-[10px] text-gray-400 uppercase tracking-wider mt-1">High</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-amber-500 font-bold text-lg leading-tight">{project.risk_counts?.medium || 0}</span>
-                <span className="text-[10px] text-gray-400 uppercase tracking-wider">Medium</span>
+                <div className="flex items-baseline space-x-1">
+                  <span className="text-amber-500 font-bold text-lg leading-tight">{project.risk_counts?.medium || 0}</span>
+                  <span className="text-amber-300 text-[10px]">ML</span>
+                </div>
+                <div className="flex items-baseline space-x-1">
+                  <span className="text-amber-700 dark:text-amber-400 font-bold text-sm leading-tight">{project.pattern_counts?.medium || 0}</span>
+                  <span className="text-gray-400 text-[10px]">Pat</span>
+                </div>
+                <span className="text-[10px] text-gray-400 uppercase tracking-wider mt-1">Medium</span>
               </div>
-              <div className="flex flex-col text-right">
+              <div className="flex flex-col text-right items-end">
                 <span className="text-green-500 font-bold text-lg leading-tight">{project.risk_counts?.low || 0}</span>
-                <span className="text-[10px] text-gray-400 uppercase tracking-wider">Low</span>
+                <span className="text-[10px] text-gray-400 uppercase tracking-wider mt-1">Low (ML)</span>
               </div>
             </div>
             
